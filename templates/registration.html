@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom Stylesheet -->
+    <link rel="stylesheet" href="../static/css/registration.css">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        dark: {
+                            bg: '#0d0e12',
+                            card: '#14161f',
+                            input: '#1d202d',
+                            border: '#272a3b',
+                            accent: '#6366f1'
+                        }
+                    },
+                    animation: {
+                        'fadeIn': 'fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(6px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="min-h-full flex flex-col justify-between p-4 sm:p-6 antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
+
+    <header class="w-full max-w-5xl mx-auto flex items-center justify-between py-4 z-10">
+        <!-- Logo configured as Home Link -->
+        <a href="index.html" title="Go to Home" class="flex items-center gap-2.5 group transition-opacity hover:opacity-90">
+            <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-sm tracking-widest shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+                <i class="fa-solid fa-house text-xs"></i>
+            </div>
+            <span class="font-semibold text-slate-100 tracking-tight text-base">App</span>
+        </a>
+
+        <div class="text-xs font-medium text-slate-400">
+            <span>Already have an account?</span>
+            <a href="login.html" class="ml-1.5 text-indigo-400 hover:text-indigo-300 hover:underline transition-all">Sign in</a>
+        </div>
+    </header>
+
+    <main class="w-full max-w-md mx-auto my-auto py-8 z-10">
+        <!-- Step Progress Indicator -->
+        <div class="flex items-center justify-center gap-3 mb-6">
+            <div id="stepBadge1" class="flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 transition-all">
+                <span class="w-4 h-4 rounded-full bg-indigo-600 text-white text-[10px] flex items-center justify-center">1</span>
+                <span>Account Info</span>
+            </div>
+            <div class="w-8 h-[1px] bg-slate-800"></div>
+            <div id="stepBadge2" class="flex items-center gap-2 text-xs font-medium px-3 py-1 rounded-full bg-slate-900/60 text-slate-500 border border-slate-800 transition-all">
+                <span class="w-4 h-4 rounded-full bg-slate-800 text-slate-400 text-[10px] flex items-center justify-center">2</span>
+                <span>OTP Verification</span>
+            </div>
+        </div>
+
+        <!-- Step 1: Registration Form -->
+        <div id="step1Card" class="dark-card rounded-2xl p-6 sm:p-8 transition-all duration-300">
+            <div class="mb-6 text-center sm:text-left">
+                <h1 class="text-2xl font-bold tracking-tight text-white mb-1.5">Create your account</h1>
+                <p class="text-slate-400 text-xs leading-relaxed">Enter your details below to begin setting up your account.</p>
+            </div>
+
+            <form id="registrationForm" onsubmit="handleStep1Submit(event)" class="space-y-4" novalidate>
+                <!-- Full Name -->
+                <div>
+                    <label for="fullName" class="block text-xs font-medium text-slate-300 mb-1.5">Full Name</label>
+                    <input type="text" id="fullName" placeholder="Jane Doe" required
+                        class="dark-input w-full px-3.5 py-2.5 rounded-lg text-xs text-slate-100 placeholder-slate-500"
+                        oninput="validateField('fullName')">
+                    <p id="fullNameError" class="mt-1.5 text-[11px] text-rose-400 hidden flex items-center gap-1">
+                        <i class="fa-solid fa-circle-exclamation text-[10px]"></i>
+                        <span>Please enter your full name.</span>
+                    </p>
+                </div>
+
+                <!-- Email Address -->
+                <div>
+                    <label for="email" class="block text-xs font-medium text-slate-300 mb-1.5">Email Address</label>
+                    <input type="email" id="email" placeholder="jane@example.com" required
+                        class="dark-input w-full px-3.5 py-2.5 rounded-lg text-xs text-slate-100 placeholder-slate-500"
+                        oninput="validateField('email')">
+                    <p id="emailError" class="mt-1.5 text-[11px] text-rose-400 hidden flex items-center gap-1">
+                        <i class="fa-solid fa-circle-exclamation text-[10px]"></i>
+                        <span>Please enter a valid email address.</span>
+                    </p>
+                </div>
+
+                <!-- Password -->
+                <div>
+                    <div class="flex justify-between items-center mb-1.5">
+                        <label for="password" class="block text-xs font-medium text-slate-300">Password</label>
+                        <span id="passwordStrengthText" class="text-[10px] text-slate-500">Min 8 chars</span>
+                    </div>
+                    <div class="relative">
+                        <input type="password" id="password" placeholder="••••••••••••" required
+                            class="dark-input w-full pl-3.5 pr-9 py-2.5 rounded-lg text-xs text-slate-100 placeholder-slate-500"
+                            oninput="evaluatePasswordStrength(this.value); validateField('password'); if(document.getElementById('confirmPassword').value) validateField('confirmPassword');">
+                        <button type="button" onclick="toggleVisibility('password', 'eyeIcon1')" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 transition-colors">
+                            <i id="eyeIcon1" class="fa-regular fa-eye text-xs"></i>
+                        </button>
+                    </div>
+
+                    <!-- Password strength bar -->
+                    <div class="mt-2 grid grid-cols-4 gap-1.5">
+                        <div id="pBar1" class="h-1 bg-slate-800 rounded-full transition-colors duration-200"></div>
+                        <div id="pBar2" class="h-1 bg-slate-800 rounded-full transition-colors duration-200"></div>
+                        <div id="pBar3" class="h-1 bg-slate-800 rounded-full transition-colors duration-200"></div>
+                        <div id="pBar4" class="h-1 bg-slate-800 rounded-full transition-colors duration-200"></div>
+                    </div>
+                    <p id="passwordError" class="mt-1.5 text-[11px] text-rose-400 hidden flex items-center gap-1">
+                        <i class="fa-solid fa-circle-exclamation text-[10px]"></i>
+                        <span>Password must be at least 8 characters long.</span>
+                    </p>
+                </div>
+
+                <!-- Confirm Password -->
+                <div>
+                    <label for="confirmPassword" class="block text-xs font-medium text-slate-300 mb-1.5">Confirm Password</label>
+                    <div class="relative">
+                        <input type="password" id="confirmPassword" placeholder="••••••••••••" required
+                            class="dark-input w-full pl-3.5 pr-9 py-2.5 rounded-lg text-xs text-slate-100 placeholder-slate-500"
+                            oninput="validateField('confirmPassword')">
+                        <button type="button" onclick="toggleVisibility('confirmPassword', 'eyeIcon2')" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 transition-colors">
+                            <i id="eyeIcon2" class="fa-regular fa-eye text-xs"></i>
+                        </button>
+                    </div>
+                    <p id="confirmPasswordError" class="mt-1.5 text-[11px] text-rose-400 hidden flex items-center gap-1">
+                        <i class="fa-solid fa-circle-exclamation text-[10px]"></i>
+                        <span>Passwords do not match.</span>
+                    </p>
+                </div>
+
+                <!-- Terms & Conditions Checkbox -->
+                <div class="pt-1">
+                    <label class="flex items-start gap-2.5 cursor-pointer group">
+                        <input type="checkbox" id="terms" required class="sr-only peer" onchange="validateField('terms')">
+                        <div class="w-4 h-4 rounded border border-slate-700 bg-slate-900 peer-checked:border-indigo-500 peer-checked:bg-indigo-600 flex items-center justify-center transition-all mt-0.5">
+                            <i class="fa-solid fa-check text-[9px] text-white opacity-0 peer-checked:opacity-100 transition-opacity"></i>
+                        </div>
+                        <span class="text-xs text-slate-400 leading-normal group-hover:text-slate-300 transition-colors">
+                            I agree to the <a href="#" class="text-indigo-400 underline hover:text-indigo-300">Terms of Service</a> & <a href="#" class="text-indigo-400 underline hover:text-indigo-300">Privacy Policy</a>
+                        </span>
+                    </label>
+                    <p id="termsError" class="mt-1 text-[11px] text-rose-400 hidden">You must agree to continue.</p>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" id="step1Btn" 
+                    class="w-full mt-3 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/25 transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.99]">
+                    <span>Continue to Verification</span>
+                    <i class="fa-solid fa-arrow-right text-xs"></i>
+                </button>
+            </form>
+        </div>
+
+        <!-- Step 2: OTP Verification Card -->
+        <div id="step2Card" class="dark-card rounded-2xl p-6 sm:p-8 hidden animate-fadeIn">
+            <div class="mb-6 text-center sm:text-left">
+                <div class="w-10 h-10 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-3">
+                    <i class="fa-solid fa-envelope-open-text text-base"></i>
+                </div>
+                <h2 class="text-2xl font-bold tracking-tight text-white mb-1.5">Verify your email</h2>
+                <p class="text-slate-400 text-xs leading-relaxed">
+                    We sent a 6-digit verification code to<br>
+                    <span id="targetEmail" class="text-slate-200 font-medium"></span> 
+                    <button type="button" onclick="goToStep1()" class="text-indigo-400 hover:underline ml-1 text-xs">Edit</button>
+                </p>
+            </div>
+
+            <!-- OTP Input Fields -->
+            <form id="otpForm" onsubmit="handleOtpSubmit(event)" class="space-y-6">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-3 text-center sm:text-left">Enter Security Code</label>
+                    <div class="flex items-center justify-between gap-1.5 sm:gap-2" id="otpInputContainer">
+                        <input type="text" maxlength="1" pattern="[0-9]*" inputmode="numeric" class="otp-input dark-input w-11 sm:w-12 h-12 text-center text-lg font-bold text-white rounded-xl focus:border-indigo-500" required>
+                        <input type="text" maxlength="1" pattern="[0-9]*" inputmode="numeric" class="otp-input dark-input w-11 sm:w-12 h-12 text-center text-lg font-bold text-white rounded-xl focus:border-indigo-500" required>
+                        <input type="text" maxlength="1" pattern="[0-9]*" inputmode="numeric" class="otp-input dark-input w-11 sm:w-12 h-12 text-center text-lg font-bold text-white rounded-xl focus:border-indigo-500" required>
+                        <input type="text" maxlength="1" pattern="[0-9]*" inputmode="numeric" class="otp-input dark-input w-11 sm:w-12 h-12 text-center text-lg font-bold text-white rounded-xl focus:border-indigo-500" required>
+                        <input type="text" maxlength="1" pattern="[0-9]*" inputmode="numeric" class="otp-input dark-input w-11 sm:w-12 h-12 text-center text-lg font-bold text-white rounded-xl focus:border-indigo-500" required>
+                        <input type="text" maxlength="1" pattern="[0-9]*" inputmode="numeric" class="otp-input dark-input w-11 sm:w-12 h-12 text-center text-lg font-bold text-white rounded-xl focus:border-indigo-500" required>
+                    </div>
+                    <p id="otpError" class="mt-2 text-[11px] text-rose-400 text-center hidden flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-circle-exclamation text-[10px]"></i>
+                        <span>Invalid OTP code. Please try again.</span>
+                    </p>
+                </div>
+
+                <!-- Resend Timer -->
+                <div class="text-center text-xs text-slate-400">
+                    <span>Didn't receive the code?</span>
+                    <button type="button" id="resendBtn" onclick="resendOtp()" disabled class="ml-1 text-indigo-400 disabled:text-slate-600 disabled:cursor-not-allowed hover:underline font-medium">
+                        Resend Code
+                    </button>
+                    <span id="timerText" class="text-slate-500 ml-1">(<span id="countdown">60</span>s)</span>
+                </div>
+
+                <!-- Verify Button -->
+                <button type="submit" id="verifyBtn" 
+                    class="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/25 transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.99]">
+                    <span>Verify & Complete</span>
+                    <i class="fa-solid fa-check text-xs"></i>
+                </button>
+            </form>
+        </div>
+
+        <!-- Success Message State -->
+        <div id="successCard" class="dark-card rounded-2xl p-8 text-center hidden animate-fadeIn">
+            <div class="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4">
+                <i class="fa-solid fa-check text-xl"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-white mb-1.5">Welcome aboard!</h2>
+            <p class="text-xs text-slate-400 mb-6 leading-relaxed">Your email address has been verified successfully. Your account is now active and ready to go.</p>
+            
+            <button type="button" onclick="resetAll()" 
+                class="w-full py-2.5 px-4 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 font-medium text-xs transition-all">
+                Back to Registration
+            </button>
+        </div>
+    </main>
+
+    <footer class="w-full max-w-5xl mx-auto py-4 text-center sm:flex sm:justify-between sm:items-center text-[11px] text-slate-500 border-t border-slate-900 gap-2">
+        <div>&copy; 2026 Platform Inc. All rights reserved.</div>
+        <div class="mt-2 sm:mt-0 space-x-4">
+            <a href="#" class="hover:text-slate-400 transition-colors">Privacy</a>
+            <a href="#" class="hover:text-slate-400 transition-colors">Terms</a>
+            <a href="#" class="hover:text-slate-400 transition-colors">Contact</a>
+        </div>
+    </footer>
+
+    <!-- Custom Script -->
+    <script src="../static/js/registration.js"></script>
+</body>
+</html>

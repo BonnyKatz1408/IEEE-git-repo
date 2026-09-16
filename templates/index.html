@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RepoMapper - Understand Any GitHub Repo</title>
+    <link rel="stylesheet" href="../static/css/indexpage.css">
+    <!-- Google Fonts for Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M7 8L3 12L7 16" stroke="#8ba5cb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M17 8L21 12L17 16" stroke="#8ba5cb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M14 4L10 20" stroke="#8ba5cb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>RepoMapper</span>
+        </div>
+        
+        <ul class="nav-links">
+            <li><a href="#">Features</a></li>
+            <li><a href="#">How It Works</a></li>
+            <li><a href="#">Pricing</a></li>
+        </ul>
+
+        <div class="nav-actions">
+            <a href="#" class="btn-login">Log In</a>
+            <a href="/register" class="btn-primary">Get Started</a>
+        </div>
+    </nav>
+
+    <main class="hero">
+        <h1>Understand Any GitHub Repo in Minutes</h1>
+        <p class="subtitle">Paste a GitHub link, and RepoMapper visualizes the project structure, key dependencies, and codebase flow instantly.</p>
+
+        <div class="input-card">
+            <label for="repo-url">Paste GitHub Repository URL</label>
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.48 2 12C2 16.418 4.865 20.166 8.839 21.492C9.339 21.584 9.52 21.275 9.52 21.011C9.52 20.776 9.511 20.148 9.506 19.309C6.726 19.913 6.139 17.969 6.139 17.969C5.684 16.815 5.029 16.507 5.029 16.507C4.123 15.888 5.097 15.9 5.097 15.9C6.099 15.97 6.626 16.93 6.626 16.93C7.515 18.453 8.956 18.013 9.54 17.756C9.63 17.094 9.897 16.654 10.194 16.403C7.974 16.151 5.64 15.293 5.64 11.536C5.64 10.465 6.022 9.59 6.643 8.898C6.543 8.647 6.205 7.647 6.739 6.302C6.739 6.302 7.556 6.04 9.5 7.355C10.276 7.14 11.139 7.032 12 7.028C12.861 7.032 13.724 7.14 14.501 7.355C16.444 6.04 17.26 6.302 17.26 6.302C17.795 7.647 17.457 8.647 17.357 8.898C17.979 9.59 18.358 10.465 18.358 11.536C18.358 15.304 16.022 16.148 13.795 16.393C14.167 16.713 14.499 17.348 14.499 18.318C14.499 19.708 14.486 20.832 14.486 21.011C14.486 21.278 14.665 21.59 15.171 21.491C19.143 20.164 22 16.417 22 12C22 6.48 17.523 2 12 2Z"/>
+                    </svg>
+                    <input type="text" id="repo-url" placeholder="https://github.com/facebook/react">
+                </div>
+                <button class="btn-primary btn-map">Map Repository</button>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-left">
+            © 2023 © RepoMapper delivers. All rights reserved.
+        </div>
+        <div class="footer-right">
+            <a href="#">RepoMapper.com</a>
+            <a href="#">Privacy</a>
+            <a href="#">Terms</a>
+        </div>
+    </footer>
+
+</body>
+</html>
