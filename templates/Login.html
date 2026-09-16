@@ -47,17 +47,13 @@
 <body class="min-h-full flex flex-col justify-between p-4 sm:p-6 antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
 
     <header class="w-full max-w-5xl mx-auto flex items-center justify-between py-4 z-10">
-        <div class="flex items-center gap-2.5">
-            <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-sm tracking-widest shadow-lg shadow-indigo-500/20">
-                <i class="fa-solid fa-shield-halved text-xs"></i>
+        <!-- Logo configured as Home Link -->
+        <a href="index.html" title="Go to Home" class="flex items-center gap-2.5 group transition-opacity hover:opacity-90">
+            <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-sm tracking-widest shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+                <i class="fa-solid fa-house text-xs"></i>
             </div>
             <span class="font-semibold text-slate-100 tracking-tight text-base">App</span>
-        </div>
-
-        <div class="text-xs font-medium text-slate-400">
-            <span>Don't have an account?</span>
-            <a href="registration.html" class="ml-1.5 text-indigo-400 hover:text-indigo-300 hover:underline transition-all">Create account</a>
-        </div>
+        </a>
     </header>
 
     <main class="w-full max-w-md mx-auto my-auto py-8 z-10">
@@ -129,9 +125,15 @@
                     <i class="fa-solid fa-arrow-right text-xs"></i>
                 </button>
             </form>
+
+            <!-- Registration link inside the card -->
+            <div class="mt-6 pt-4 border-t border-slate-800/80 text-center text-xs text-slate-400">
+                <span>Don't have an account?</span>
+                <a href="registration.html" class="ml-1 text-indigo-400 hover:text-indigo-300 font-medium hover:underline transition-all">Create account</a>
+            </div>
         </div>
 
-        <!-- Forgot Password Card (Initially Hidden) -->
+        <!-- Forgot Password Card -->
         <div id="forgotPasswordCard" class="dark-card rounded-2xl p-6 sm:p-8 hidden animate-fadeIn">
             <div class="mb-6 text-center sm:text-left">
                 <div class="w-10 h-10 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-3">
@@ -169,7 +171,7 @@
             </form>
         </div>
 
-        <!-- Success Message State (Initially Hidden) -->
+        <!-- Success Message State -->
         <div id="successCard" class="dark-card rounded-2xl p-8 text-center hidden animate-fadeIn">
             <div class="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4">
                 <i class="fa-solid fa-check text-xl"></i>
