@@ -44,38 +44,55 @@ def _callee_name(func):
     return name
 
 
+def _callee_receiver(func):
+    if func and func.type == "field_expression":
+        receiver = func.child_by_field_name("argument")
+        return _decode(receiver)
+    return None
+
+
+def _enclosing_caller(node, file_path):
+    current = node.parent
+    while current:
+        if current.type == "function_definition":
+            name = _function_name(current.child_by_field_name("declarator"))
+            if name:
+                return f"{file_path}::{name}"
+        current = current.parent
+    return None
+
+
 def extract(tree, file_path):
     symbols = []
     calls = []
     file_str = str(file_path)
 
-    def visit(node, caller):
+    for node in walk(tree.root_node):
+
         if node.type == "function_definition":
             name = _function_name(node.child_by_field_name("declarator"))
-            if name:
-                qualified_name = f"{file_path}::{name}"
-                symbols.append({
-                    "name": name,
-                    "qualified_name": qualified_name,
-                    "type": "function",
-                    "language": "cpp",
-                    "file": file_str,
-                    "line": node.start_point[0] + 1
-                })
-                caller = qualified_name
+            if not name:
+                continue
+
+            symbols.append({
+                "name": name,
+                "qualified_name": f"{file_path}::{name}",
+                "type": "function",
+                "language": "cpp",
+                "file": file_str,
+                "line": node.start_point[0] + 1,
+                "end_line": node.end_point[0] + 1
+            })
 
         elif node.type == "call_expression":
             name = _callee_name(node.child_by_field_name("function"))
             if name:
                 calls.append({
                     "name": name,
-                    "caller": caller,
+                    "caller": _enclosing_caller(node, file_path),
+                    "receiver": _callee_receiver(node.child_by_field_name("function")),
                     "file": file_str,
                     "line": node.start_point[0] + 1
                 })
 
-        for child in node.children:
-            visit(child, caller)
-
-    visit(tree.root_node, None)
     return symbols, calls

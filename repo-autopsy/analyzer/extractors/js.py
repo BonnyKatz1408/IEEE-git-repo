@@ -46,31 +46,63 @@ def _callee_name_from_expr(node):
     return name
 
 
+def _callee_receiver(node):
+    func = node.child_by_field_name("function")
+    if func is None:
+        func = node.child_by_field_name("constructor")
+    if func and func.type in ("member_expression", "optional_chain"):
+        receiver = func.child_by_field_name("object")
+        return _decode(receiver)
+    return None
+
+
+def _enclosing_caller(node, file_path):
+    current = node.parent
+    while current:
+        if current.type == "function_declaration":
+            name_node = current.child_by_field_name("name")
+            if name_node:
+                return f"{file_path}::{_decode(name_node)}"
+
+        if current.type == "arrow_function":
+            parent = current.parent
+            if parent and parent.type == "variable_declarator":
+                name_node = parent.child_by_field_name("name")
+                if name_node:
+                    return f"{file_path}::{_decode(name_node)}"
+
+        current = current.parent
+    return None
+
+
 def extract(tree, file_path):
     symbols = []
     calls = []
     file_str = str(file_path)
 
-    def visit(node, caller):
+    for node in walk(tree.root_node):
+
         # function foo() {}
         if node.type == "function_declaration":
             name_node = node.child_by_field_name("name")
+
             if name_node:
                 name = _decode(name_node)
-                qualified_name = f"{file_path}::{name}"
+
                 symbols.append({
                     "name": name,
-                    "qualified_name": qualified_name,
+                    "qualified_name": f"{file_path}::{name}",
                     "type": "function",
                     "language": "javascript",
                     "file": file_str,
-                    "line": node.start_point[0] + 1
+                        "line": node.start_point[0] + 1,
+                        "end_line": node.end_point[0] + 1
                 })
-                caller = qualified_name
 
         # const foo = () => {}
         elif node.type == "lexical_declaration":
             for child in node.children:
+
                 if child.type != "variable_declarator":
                     continue
 
@@ -82,35 +114,26 @@ def extract(tree, file_path):
 
                 if value_node.type == "arrow_function":
                     name = _decode(name_node)
-                    qualified_name = f"{file_path}::{name}"
+
                     symbols.append({
                         "name": name,
-                        "qualified_name": qualified_name,
+                        "qualified_name": f"{file_path}::{name}",
                         "type": "function",
                         "language": "javascript",
                         "file": file_str,
-                        "line": child.start_point[0] + 1
+                        "line": child.start_point[0] + 1,
+                        "end_line": value_node.end_point[0] + 1
                     })
-
-        if node.type == "arrow_function":
-            parent = node.parent
-            if parent and parent.type == "variable_declarator":
-                name_node = parent.child_by_field_name("name")
-                if name_node:
-                    caller = f"{file_path}::{_decode(name_node)}"
 
         if node.type in ("call_expression", "new_expression"):
             name = _callee_name(node)
             if name:
                 calls.append({
                     "name": name,
-                    "caller": caller,
+                    "caller": _enclosing_caller(node, file_path),
+                    "receiver": _callee_receiver(node),
                     "file": file_str,
                     "line": node.start_point[0] + 1
                 })
 
-        for child in node.children:
-            visit(child, caller)
-
-    visit(tree.root_node, None)
     return symbols, calls
