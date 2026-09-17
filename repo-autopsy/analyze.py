@@ -7,6 +7,7 @@ from analyzer.graph_analysis import analyze_graph
 from analyzer.imports import analyze_imports
 from analyzer.architecture import enrich_architecture
 from analyzer.report import build_report, print_report
+from analyzer.explainer import generate_explanation
 from analyzer.extractors.java import extract as extract_java
 from analyzer.extractors.cpp import extract as extract_cpp
 from analyzer.extractors.js import extract as extract_javascript
@@ -131,7 +132,40 @@ def analyze(url):
     analysis.update(enrich_architecture(analysis, import_analysis, source_files, repo_path))
     analysis["resolution_issues"] = resolution["unresolved"]
     report = build_report(analysis, source_files, LANGUAGES, repo_path)
+    print("\nDETERMINISTIC ANALYSIS")
     print_report(report, repo_path)
+    explanation = generate_explanation(report, repo_path, env_file=project_root / ".env")
+    report["llm_explanation"] = explanation
+    print("\nGEMINI EXPLANATION")
+    print(f"status: {explanation['status']} | model: {explanation['model']}")
+    print(
+        f"input_chars: {explanation.get('input_character_count', explanation.get('context_size', 0))} "
+        f"estimated_context_tokens: {explanation.get('estimated_context_tokens', 0)} "
+        f"timeout_ms: {explanation.get('timeout_ms', 'n/a')} "
+        f"thinking_level: {explanation.get('thinking_level', 'low')} "
+        f"attempts: {explanation.get('attempts', 0)}"
+    )
+    if explanation["status"] == "ok":
+        generated = explanation.get("explanation") or {}
+        print("\nSUMMARY")
+        print(generated.get("summary") or "Gemini returned a structured explanation without a summary.")
+        print("\nARCHITECTURE")
+        for item in generated.get("architecture", []):
+            print(f"- {item.get('module', item.get('name', 'unknown module'))}: {item.get('description', item.get('reason', 'UNKNOWN'))}")
+        print("\nHOW IT WORKS")
+        for flow in generated.get("execution_flows", []):
+            print(f"- {flow.get('entry_point', 'unknown entry point')}: {flow.get('description', 'UNKNOWN')}")
+            for step in flow.get("steps", []):
+                print(f"  - {step}")
+        print("\nWHERE TO START")
+        for item in generated.get("reading_order", []):
+            print(f"- {item.get('path', 'unknown path')}: {item.get('reason', 'UNKNOWN')}")
+        if generated.get("caveats"):
+            print("\nCAVEATS")
+            for caveat in generated["caveats"]:
+                print(f"- {caveat}")
+    else:
+        print(f"unavailable: {explanation['error']}")
     return report
 
 

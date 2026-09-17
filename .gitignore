@@ -1,4 +1,7 @@
+# Local secrets, including GEMINI_API_KEY
 .env
+.env.*
+!.env.example
 venv/
 firebase-service-account.json
 repos/
