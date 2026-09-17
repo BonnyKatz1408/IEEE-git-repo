@@ -406,9 +406,9 @@ def _reading_order(analysis, modules, root):
         module["module"]: module["incoming_dependencies"] + module["outgoing_dependencies"]
         for module in modules
     }
-    max_centrality = max(module_centrality.values(), default=1)
-    max_hotspot = max((metric["hotspot_score"] for metric in analysis["file_metrics"]), default=1)
-    max_imports = max((metric.get("outgoing_import_dependencies", 0) for metric in analysis["file_metrics"]), default=1)
+    max_centrality = max(1, max(module_centrality.values(), default=0))
+    max_hotspot = max(1, max((metric["hotspot_score"] for metric in analysis["file_metrics"]), default=0))
+    max_imports = max(1, max((metric.get("outgoing_import_dependencies", 0) for metric in analysis["file_metrics"]), default=0))
     candidates = []
     for metric in analysis["file_metrics"]:
         if metric["is_test"]:

@@ -10,9 +10,9 @@ def _module_for(file_name, root):
 def _edge_counts(import_edges, call_edges):
     counts = defaultdict(lambda: {"import_count": 0, "call_count": 0})
     for edge in import_edges:
-        counts[(edge["from"], edge["to"])] ["import_count"] += 1
+        counts[(str(edge["from"]), str(edge["to"]))]["import_count"] += 1
     for edge in call_edges:
-        counts[(edge["from"], edge["to"])] ["call_count"] += edge.get("count", 1)
+        counts[(str(edge["from"]), str(edge["to"]))]["call_count"] += edge.get("count", 1)
     return counts
 
 

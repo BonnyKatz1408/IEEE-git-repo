@@ -47,9 +47,33 @@
                     </svg>
                     <input type="text" id="repo-url" placeholder="https://github.com/facebook/react">
                 </div>
-                <button class="btn-primary btn-map">Map Repository</button>
+                <button class="btn-primary btn-map" id="analyze-btn" type="button">Map Repository</button>
             </div>
+            <p class="form-message" id="form-message" role="status"></p>
         </div>
+    </main>
+
+    <main class="analysis-view hidden" id="analysis-view">
+        <header class="analysis-header">
+            <div>
+                <p class="eyebrow">Repository map</p>
+                <h1 id="analysis-title">Repository</h1>
+            </div>
+            <button class="btn-login" id="new-analysis-btn" type="button">New analysis</button>
+        </header>
+        <div class="analysis-layout">
+            <aside class="map-sidebar" id="map-sidebar" aria-label="Map guide"></aside>
+            <section class="map-panel" aria-label="Interactive repository map">
+                <div class="map-canvas" id="map-canvas"></div>
+                <div class="map-tooltip hidden" id="map-tooltip"></div>
+                <div class="map-legend">
+                    <span><i class="legend-swatch legend-normal"></i>File size</span>
+                    <span><i class="legend-swatch legend-hotspot"></i>Hotspot</span>
+                    <span><i class="legend-swatch legend-entry"></i>Entry point</span>
+                </div>
+            </section>
+        </div>
+        <footer class="map-stats" id="map-stats"></footer>
     </main>
 
     <footer class="footer">
@@ -64,4 +88,12 @@
     </footer>
 
 </body>
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js"
+    }
+}
+</script>
+<script type="module" src="../static/js/index.js"></script>
 </html>
