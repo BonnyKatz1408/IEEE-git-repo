@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WayPoint — Secure Login</title>
+  <link rel="stylesheet" href="../static/css/login.css" />
+</head>
+<body>
+
+  <!-- Background Interactive Canvas -->
+  <canvas id="bgCanvas"></canvas>
+
+  <!-- Ambient Node Overlays -->
+  <div class="node-overlay-container" id="nodeContainer"></div>
+
+  <!-- Main Login Card -->
+  <main class="login-container">
+    
+    <!-- Brand / Header -->
+    <header class="brand-header">
+      <div class="brand-logo">
+        <a href="/"><img src="../static/images/logo.png" alt="" height="40"></a>
+      </div>
+      <h1 class="brand-name">WayPoint</h1>
+      <p class="brand-tagline">Secure Authentication Node</p>
+    </header>
+
+    <!-- Step Indicators -->
+    <div class="step-indicator">
+      <div class="step-badge active" id="stepBadge1">
+        <span class="badge-num">1</span>
+        <span class="badge-text">Credentials</span>
+      </div>
+      <div class="step-line" id="stepLine"></div>
+      <div class="step-badge" id="stepBadge2">
+        <span class="badge-num">2</span>
+        <span class="badge-text">Security Key</span>
+      </div>
+    </div>
+
+    <!-- Alert Message Box -->
+    <div class="alert-box" id="alertBox"></div>
+
+    <!-- Login Form -->
+    <form id="loginForm" novalidate>
+      
+      <!-- STEP 1: Account Credentials -->
+      <section class="form-step active" id="step1">
+        <div class="input-group">
+          <label for="username">Email or Developer ID</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <input type="text" id="username" placeholder="alex@repository.io" required autocomplete="username" />
+          </div>
+        </div>
+
+        <div class="input-group">
+          <div class="label-row">
+            <label for="password">Password</label>
+            <a href="#" class="inline-link" tabindex="-1">Forgot?</a>
+          </div>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <input type="password" id="password" placeholder="••••••••••••" required autocomplete="current-password" />
+            <button type="button" class="password-toggle" id="togglePassword" title="Toggle password visibility">
+              <svg id="eyeIcon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="options-row">
+          <label class="checkbox-container">
+            <input type="checkbox" id="rememberMe" />
+            <span class="checkmark"></span>
+            <span class="checkbox-label">Keep session active</span>
+          </label>
+        </div>
+
+        <button type="button" class="btn btn-primary" id="btnStep1">
+          Continue
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </section>
+
+      <!-- STEP 2: 2FA Verification Code -->
+      <section class="form-step" id="step2">
+        <div class="2fa-info">
+          <p class="2fa-title">Enter 6-Digit Security Code</p>
+          <p class="2fa-desc">A verification code has been dispatched to your primary node device.</p>
+        </div>
+
+        <div class="otp-container" id="otpContainer">
+          <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" autofocus />
+          <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" />
+          <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" />
+          <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" />
+          <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" />
+          <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" />
+        </div>
+
+        <div class="resend-wrapper">
+          <span>Didn't receive the code?</span>
+          <button type="button" class="link-btn" id="btnResend">Resend Code</button>
+        </div>
+
+        <div class="btn-group">
+          <button type="button" class="btn btn-secondary" id="btnBack">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            Back
+          </button>
+          <button type="submit" class="btn btn-primary" id="btnSubmit">
+            Verify & Authenticate
+          </button>
+        </div>
+      </section>
+
+      <!-- Success State Screen -->
+      <section class="form-step" id="stepSuccess">
+        <div class="success-screen">
+          <div class="success-icon">
+            <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+          </div>
+          <h2>Authentication Successful</h2>
+          <p>Access granted to developer environment. Redirecting to workspace...</p>
+          <button type="button" class="btn btn-secondary" id="btnReset" style="margin-top: 15px;">Reset Demo</button>
+        </div>
+      </section>
+
+    </form>
+
+    <!-- Footer link to Registration -->
+    <footer class="card-footer">
+      <span>Don't have an account?</span>
+      <a href="/register" class="register-link">Register now</a>
+    </footer>
+
+  </main>
+
+  <script src="../static/js/login.js"></script>
+</body>
+</html>

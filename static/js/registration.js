@@ -1,239 +1,187 @@
-let countdownInterval;
-let timerSeconds = 60;
+const canvas = document.getElementById('bg-canvas');
+const ctx = canvas.getContext('2d');
 
-// Toggle Password Visibility
-function toggleVisibility(inputId, iconId) {
-    const input = document.getElementById(inputId);
-    const icon = document.getElementById(iconId);
+let width = canvas.width = window.innerWidth;
+let height = canvas.height = window.innerHeight;
 
-    if (input.type === 'password') {
-        input.type = 'text';
-        icon.className = 'fa-regular fa-eye-slash text-xs text-slate-200';
-    } else {
-        input.type = 'password';
-        icon.className = 'fa-regular fa-eye text-xs text-slate-400';
-    }
-}
-
-// Real-time Password Strength Meter
-function evaluatePasswordStrength(val) {
-    const label = document.getElementById('passwordStrengthText');
-    const bars = [
-        document.getElementById('pBar1'),
-        document.getElementById('pBar2'),
-        document.getElementById('pBar3'),
-        document.getElementById('pBar4')
-    ];
-
-    bars.forEach(b => b.className = 'h-1 bg-slate-800 rounded-full transition-colors duration-200');
-
-    if (!val) {
-        label.textContent = 'Min 8 chars';
-        label.className = 'text-[10px] text-slate-500';
-        return;
-    }
-
-    let score = 0;
-    if (val.length >= 8) score++;
-    if (/[A-Z]/.test(val) && /[a-z]/.test(val)) score++;
-    if (/[0-9]/.test(val)) score++;
-    if (/[^A-Za-z0-9]/.test(val)) score++;
-
-    const colors = ['bg-rose-500', 'bg-amber-500', 'bg-blue-400', 'bg-indigo-500'];
-    const labels = ['Weak', 'Fair', 'Good', 'Strong'];
-    const labelColors = ['text-rose-400', 'text-amber-400', 'text-blue-400', 'text-indigo-400'];
-
-    for (let i = 0; i < score; i++) {
-        bars[i].className = `h-1 ${colors[score - 1]} rounded-full transition-colors duration-200`;
-    }
-
-    label.textContent = labels[score - 1] || 'Weak';
-    label.className = `text-[10px] ${labelColors[score - 1] || 'text-rose-400'}`;
-}
-
-// Single field validation rule
-function validateField(fieldId) {
-    const input = document.getElementById(fieldId);
-    const error = document.getElementById(`${fieldId}Error`);
-    let isValid = true;
-
-    if (fieldId === 'fullName') {
-        isValid = input.value.trim().length >= 2;
-    } else if (fieldId === 'email') {
-        isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value.trim());
-    } else if (fieldId === 'password') {
-        isValid = input.value.length >= 8;
-    } else if (fieldId === 'confirmPassword') {
-        const pass = document.getElementById('password').value;
-        isValid = input.value.length > 0 && input.value === pass;
-    } else if (fieldId === 'terms') {
-        isValid = input.checked;
-    }
-
-    if (!isValid) {
-        error?.classList.remove('hidden');
-    } else {
-        error?.classList.add('hidden');
-    }
-
-    return isValid;
-}
-
-// Handle Step 1 Submit
-function handleStep1Submit(e) {
-    e.preventDefault();
-
-    const isNameValid = validateField('fullName');
-    const isEmailValid = validateField('email');
-    const isPassValid = validateField('password');
-    const isConfirmValid = validateField('confirmPassword');
-    const isTermsValid = validateField('terms');
-
-    if (isNameValid && isEmailValid && isPassValid && isConfirmValid && isTermsValid) {
-        const btn = document.getElementById('step1Btn');
-        btn.disabled = true;
-        btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-xs"></i> <span>Sending Code...</span>`;
-
-        setTimeout(() => {
-            btn.disabled = false;
-            btn.innerHTML = `<span>Continue to Verification</span> <i class="fa-solid fa-arrow-right text-xs"></i>`;
-
-            // Transition to Step 2
-            document.getElementById('step1Card').classList.add('hidden');
-            document.getElementById('step2Card').classList.remove('hidden');
-            document.getElementById('targetEmail').textContent = document.getElementById('email').value.trim();
-
-            // Update Step Indicators
-            document.getElementById('stepBadge1').className = 'flex items-center gap-2 text-xs font-medium px-3 py-1 rounded-full bg-slate-900/60 text-slate-500 border border-slate-800 transition-all';
-            document.getElementById('stepBadge2').className = 'flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 transition-all';
-
-            // Start Resend Timer and Focus First OTP Box
-            startResendTimer();
-            const otpInputs = document.querySelectorAll('.otp-input');
-            if (otpInputs.length > 0) otpInputs[0].focus();
-        }, 800);
-    }
-}
-
-// Return to Step 1
-function goToStep1() {
-    document.getElementById('step2Card').classList.add('hidden');
-    document.getElementById('step1Card').classList.remove('hidden');
-
-    document.getElementById('stepBadge1').className = 'flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 transition-all';
-    document.getElementById('stepBadge2').className = 'flex items-center gap-2 text-xs font-medium px-3 py-1 rounded-full bg-slate-900/60 text-slate-500 border border-slate-800 transition-all';
-
-    clearInterval(countdownInterval);
-}
-
-// OTP Input Interactivity Logic
-document.addEventListener('DOMContentLoaded', () => {
-    const otpInputs = document.querySelectorAll('.otp-input');
-    otpInputs.forEach((input, index) => {
-        // Focus next on input
-        input.addEventListener('input', (e) => {
-            const val = e.target.value;
-            if (val.length === 1 && index < otpInputs.length - 1) {
-                otpInputs[index + 1].focus();
-            }
-        });
-
-        // Backspace handling
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Backspace' && !input.value && index > 0) {
-                otpInputs[index - 1].focus();
-            }
-        });
-
-        // Paste handling
-        input.addEventListener('paste', (e) => {
-            e.preventDefault();
-            const pastedData = e.clipboardData.getData('text').trim().replace(/[^0-9]/g, '');
-            if (pastedData) {
-                const chars = pastedData.split('');
-                otpInputs.forEach((inp, idx) => {
-                    if (chars[idx]) {
-                        inp.value = chars[idx];
-                    }
-                });
-                const targetIdx = Math.min(chars.length, otpInputs.length) - 1;
-                if (targetIdx >= 0) otpInputs[targetIdx].focus();
-            }
-        });
-    });
+window.addEventListener('resize', () => {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+    initNodes();
 });
 
-// Start Resend Timer
-function startResendTimer() {
-    clearInterval(countdownInterval);
-    timerSeconds = 60;
-    const timerText = document.getElementById('timerText');
-    const resendBtn = document.getElementById('resendBtn');
-    const countdownEl = document.getElementById('countdown');
+// Graph Nodes logic with dimmed settings
+const NODE_COUNT = 32;
+let nodes = [];
 
-    resendBtn.disabled = true;
-    timerText.classList.remove('hidden');
-    countdownEl.textContent = timerSeconds;
+class GraphNode {
+    constructor() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.vx = (Math.random() - 0.5) * 0.3;
+        this.vy = (Math.random() - 0.5) * 0.3;
+        this.radius = Math.random() * 2 + 1;
+    }
 
-    countdownInterval = setInterval(() => {
-        timerSeconds--;
-        countdownEl.textContent = timerSeconds;
-        if (timerSeconds <= 0) {
-            clearInterval(countdownInterval);
-            resendBtn.disabled = false;
-            timerText.classList.add('hidden');
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+
+        if (this.x < 0 || this.x > width) this.vx *= -1;
+        if (this.y < 0 || this.y > height) this.vy *= -1;
+    }
+
+    draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.fill();
+    }
+}
+
+function initNodes() {
+    nodes = [];
+    for (let i = 0; i < NODE_COUNT; i++) {
+        nodes.push(new GraphNode());
+    }
+}
+
+function animateGraph() {
+    ctx.clearRect(0, 0, width, height);
+
+    // Draw subtle dimmed connecting lines
+    for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+            const dx = nodes[i].x - nodes[j].x;
+            const dy = nodes[i].y - nodes[j].y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < 180) {
+                ctx.beginPath();
+                ctx.moveTo(nodes[i].x, nodes[i].y);
+                ctx.lineTo(nodes[j].x, nodes[j].y);
+                const alpha = (1 - dist / 180) * 0.08;
+                ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.setLineDash([3, 3]);
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
         }
-    }, 1000);
+    }
+
+    // Update & draw nodes
+    nodes.forEach(node => {
+        node.update();
+        node.draw();
+    });
+
+    requestAnimationFrame(animateGraph);
 }
 
-function resendOtp() {
-    const resendBtn = document.getElementById('resendBtn');
-    resendBtn.innerText = 'Sending...';
-    setTimeout(() => {
-        resendBtn.innerText = 'Resend Code';
-        startResendTimer();
-    }, 600);
+initNodes();
+animateGraph();
+
+const sampleNodes = [
+    { name: 'src/server.ts', tag: 'ENTRY', color: '#3b82f6', in: 0, out: 5, top: '18%', left: '12%' },
+    { name: 'middleware/auth', tag: 'MODULE', color: '#8b5cf6', in: 1, out: 3, top: '22%', left: '30%' },
+    { name: 'services/user', tag: 'SERVICE', color: '#10b981', in: 3, out: 2, top: '35%', left: '60%' },
+    { name: 'lib/cache/redis', tag: 'STORAGE', color: '#f59e0b', in: 2, out: 0, top: '20%', left: '78%' },
+    { name: 'routes/v1/users', tag: 'ROUTE', color: '#ec4899', in: 2, out: 4, top: '52%', left: '26%' },
+    { name: 'models/schema', tag: 'STORAGE', color: '#f59e0b', in: 4, out: 1, top: '62%', left: '75%' },
+    { name: 'utils/telemetry', tag: 'MODULE', color: '#8b5cf6', in: 5, out: 0, top: '48%', left: '86%' },
+    { name: 'workers/queue', tag: 'SERVICE', color: '#10b981', in: 3, out: 2, top: '82%', left: '70%' }
+];
+
+const container = document.getElementById('node-overlay-container');
+sampleNodes.forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'dom-node';
+    el.style.top = item.top;
+    el.style.left = item.left;
+    el.innerHTML = `
+        <span class="dot" style="background: ${item.color};"></span>
+        <span>${item.name}</span>
+        <span class="tag">${item.tag}</span>
+        <span class="metrics">in: ${item.in} out: ${item.out}</span>
+    `;
+    container.appendChild(el);
+});
+
+let currentStep = 1;
+
+function goToStep(stepNumber) {
+    const step1 = document.getElementById('step-1');
+    const step2 = document.getElementById('step-2');
+    const btnBack = document.getElementById('btn-back');
+    const btnNext = document.getElementById('btn-next');
+    const btnSubmit = document.getElementById('btn-submit');
+    const progressBar = document.getElementById('progress-bar');
+    const stepTitle = document.getElementById('step-title');
+    const stepIndicator = document.getElementById('step-indicator');
+    const passwordMatchError = document.getElementById('password-match-error');
+
+    // Validate Step 1 before proceeding
+    if (stepNumber === 2) {
+        const fullname = document.getElementById('fullname');
+        const email = document.getElementById('email');
+        const password = document.getElementById('password');
+        const confirmPassword = document.getElementById('confirm-password');
+
+        passwordMatchError.style.display = 'none';
+
+        if (!fullname.checkValidity() || !email.checkValidity() || !password.checkValidity() || !confirmPassword.checkValidity()) {
+            fullname.reportValidity() || email.reportValidity() || password.reportValidity() || confirmPassword.reportValidity();
+            return;
+        }
+
+        if (password.value !== confirmPassword.value) {
+            passwordMatchError.style.display = 'block';
+            confirmPassword.focus();
+            return;
+        }
+
+        step1.classList.remove('active');
+        step1.classList.add('exit-left');
+        step2.classList.add('active');
+
+        btnBack.style.display = 'inline-flex';
+        btnNext.style.display = 'none';
+        btnSubmit.style.display = 'inline-flex';
+
+        progressBar.style.width = '100%';
+        stepTitle.textContent = 'Preferences';
+        stepIndicator.textContent = 'Step 2 of 2';
+        currentStep = 2;
+    } else {
+        step2.classList.remove('active');
+        step1.classList.remove('exit-left');
+        step1.classList.add('active');
+
+        btnBack.style.display = 'none';
+        btnNext.style.display = 'inline-flex';
+        btnSubmit.style.display = 'none';
+
+        progressBar.style.width = '50%';
+        stepTitle.textContent = 'Create Account';
+        stepIndicator.textContent = 'Step 1 of 2';
+        currentStep = 1;
+    }
 }
 
-// Handle Step 2 OTP Verification Submit
-function handleOtpSubmit(e) {
+function handleRegister(e) {
     e.preventDefault();
-    const otpInputs = document.querySelectorAll('.otp-input');
-    const otpCode = Array.from(otpInputs).map(inp => inp.value).join('');
-    const otpError = document.getElementById('otpError');
+    
+    // Validate Step 2 inputs
+    const role = document.getElementById('role');
+    const language = document.getElementById('language');
 
-    if (otpCode.length < 6) {
-        otpError.classList.remove('hidden');
+    if (!role.checkValidity() || !language.checkValidity()) {
+        role.reportValidity() || language.reportValidity();
         return;
     }
 
-    otpError.classList.add('hidden');
-    const verifyBtn = document.getElementById('verifyBtn');
-    verifyBtn.disabled = true;
-    verifyBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-xs"></i> <span>Verifying...</span>`;
-
-    setTimeout(() => {
-        document.getElementById('step2Card').classList.add('hidden');
-        document.getElementById('successCard').classList.remove('hidden');
-    }, 1000);
-}
-
-// Reset Form
-function resetAll() {
-    document.getElementById('registrationForm').reset();
-    const otpInputs = document.querySelectorAll('.otp-input');
-    otpInputs.forEach(input => input.value = '');
-    document.getElementById('successCard').classList.add('hidden');
-    document.getElementById('step2Card').classList.add('hidden');
-    document.getElementById('step1Card').classList.remove('hidden');
-
-    document.getElementById('stepBadge1').className = 'flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 transition-all';
-    document.getElementById('stepBadge2').className = 'flex items-center gap-2 text-xs font-medium px-3 py-1 rounded-full bg-slate-900/60 text-slate-500 border border-slate-800 transition-all';
-
-    const verifyBtn = document.getElementById('verifyBtn');
-    verifyBtn.disabled = false;
-    verifyBtn.innerHTML = `<span>Verify & Complete</span> <i class="fa-solid fa-check text-xs"></i>`;
-
-    evaluatePasswordStrength('');
-    clearInterval(countdownInterval);
+    // Hide form and display success feedback
+    document.getElementById('form-content').style.display = 'none';
+    document.getElementById('success-screen').style.display = 'block';
 }
