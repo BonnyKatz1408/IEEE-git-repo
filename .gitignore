@@ -1,4 +1,5 @@
 .env
 venv/
-firebase-service-account.json
 repos/
+__pycache__/
+*.pyc

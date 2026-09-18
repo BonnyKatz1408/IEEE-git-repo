@@ -3,15 +3,8 @@
     --card-bg: rgba(18, 18, 26, 0.85);
     --border-color: rgba(255, 255, 255, 0.1);
     --border-hover: rgba(255, 255, 255, 0.25);
-    --accent-primary: #ffffff;
-    --accent-glow: rgba(255, 255, 255, 0.15);
     --text-main: #f3f4f6;
     --text-muted: #9ca3af;
-    --node-entry: #3b82f6;
-    --node-service: #10b981;
-    --node-storage: #f59e0b;
-    --node-module: #8b5cf6;
-    --node-route: #ec4899;
     --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
@@ -40,10 +33,9 @@ body, html {
     width: 100%;
     height: 100%;
     z-index: 1;
-    opacity: 0.35; /* Dimmed background canvas for better form contrast */
+    opacity: 0.35;
 }
 
-/* Header / Brand Overlay */
 .brand-header {
     position: absolute;
     top: 24px;
@@ -62,10 +54,7 @@ body, html {
     display: flex;
     align-items: center;
     justify-content: center;
-    
 }
-
-
 
 .brand-name {
     font-size: 1.25rem;
@@ -77,7 +66,7 @@ body, html {
     position: relative;
     z-index: 10;
     width: 100%;
-    max-width: 480px;
+    max-width: 440px;
     padding: 20px;
 }
 
@@ -91,88 +80,29 @@ body, html {
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8),
                 0 0 30px rgba(255, 255, 255, 0.02);
     transition: border-color 0.3s ease;
-    overflow: hidden;
 }
 
 .card:hover {
     border-color: var(--border-hover);
 }
 
-/* Progress Bar */
-.progress-header {
+.form-header {
     margin-bottom: 24px;
 }
 
-.progress-title {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-}
-
-.progress-title h2 {
-    font-size: 1.25rem;
+.form-header h2 {
+    font-size: 1.4rem;
     font-weight: 600;
     color: #fff;
 }
 
-.step-count {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    font-weight: 500;
-}
-
-.progress-track {
-    width: 100%;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 2px;
-    overflow: hidden;
-}
-
-.progress-bar {
-    height: 100%;
-    width: 50%;
-    background: #ffffff;
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.steps-wrapper {
-    position: relative;
-    min-height: 330px;
-}
-
-.step {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateX(20px);
-    transition: opacity 0.35s ease, transform 0.35s ease, visibility 0.35s;
-}
-
-.step.active {
-    opacity: 1;
-    visibility: visible;
-    transform: translateX(0);
-}
-
-.step.exit-left {
-    opacity: 0;
-    visibility: hidden;
-    transform: translateX(-20px);
-}
-
 .input-group {
-    margin-bottom: 14px;
+    margin-bottom: 16px;
 }
 
 .input-group label {
     display: block;
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     font-weight: 500;
     color: var(--text-muted);
     margin-bottom: 6px;
@@ -182,7 +112,7 @@ body, html {
 
 .input-control {
     width: 100%;
-    padding: 10px 14px;
+    padding: 11px 14px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -200,32 +130,17 @@ body, html {
 
 .error-message {
     color: #ef4444;
-    font-size: 0.78rem;
-    margin-top: 4px;
+    font-size: 0.8rem;
+    margin-top: 6px;
     display: none;
 }
 
-select.input-control {
-    appearance: none;
-    cursor: pointer;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 14px center;
-}
-
-select.input-control option {
-    background-color: #12121a;
-    color: #fff;
-}
-
 .btn-group {
-    display: flex;
-    gap: 12px;
-    margin-top: 20px;
+    margin-top: 24px;
 }
 
 .btn {
-    flex: 1;
+    width: 100%;
     padding: 12px 20px;
     border-radius: 8px;
     font-size: 0.95rem;
@@ -236,7 +151,6 @@ select.input-control option {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
 }
 
 .btn-primary {
@@ -250,60 +164,6 @@ select.input-control option {
     transform: translateY(-1px);
 }
 
-.btn-secondary {
-    background: rgba(255, 255, 255, 0.05);
-    color: #fff;
-    border: 1px solid var(--border-color);
-}
-
-.btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: var(--border-hover);
-}
-
-/* Custom Floating DOM Node Overlay Style matching WayPoint image - dimmed */
-.dom-node {
-    position: absolute;
-    z-index: 2;
-    padding: 6px 12px;
-    background: rgba(15, 15, 22, 0.45); /* Dimmed node container */
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    font-family: monospace;
-    font-size: 0.75rem;
-    color: rgba(209, 213, 219, 0.5);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    pointer-events: none;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    user-select: none;
-    backdrop-filter: blur(2px);
-}
-
-.dom-node .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    opacity: 0.6;
-}
-
-.dom-node .tag {
-    font-size: 0.65rem;
-    padding: 1px 4px;
-    border-radius: 4px;
-    background: rgba(255,255,255,0.04);
-    color: #6b7280;
-    text-transform: uppercase;
-}
-
-.dom-node .metrics {
-    margin-left: 6px;
-    font-size: 0.65rem;
-    color: #4b5563;
-}
-
-/* Success Message Overlay */
 .success-overlay {
     display: none;
     text-align: center;

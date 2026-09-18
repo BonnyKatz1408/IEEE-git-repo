@@ -26,26 +26,13 @@
       <p class="brand-tagline">Secure Authentication Node</p>
     </header>
 
-    <!-- Step Indicators -->
-    <div class="step-indicator">
-      <div class="step-badge active" id="stepBadge1">
-        <span class="badge-num">1</span>
-        <span class="badge-text">Credentials</span>
-      </div>
-      <div class="step-line" id="stepLine"></div>
-      <div class="step-badge" id="stepBadge2">
-        <span class="badge-num">2</span>
-        <span class="badge-text">Security Key</span>
-      </div>
-    </div>
-
     <!-- Alert Message Box -->
     <div class="alert-box" id="alertBox"></div>
 
     <!-- Login Form -->
     <form id="loginForm" novalidate>
       
-      <!-- STEP 1: Account Credentials -->
+      <!-- Account Credentials -->
       <section class="form-step active" id="step1">
         <div class="input-group">
           <label for="username">Email or Developer ID</label>
@@ -86,48 +73,13 @@
           </label>
         </div>
 
-        <button type="button" class="btn btn-primary" id="btnStep1">
-          Continue
+        <button type="submit" class="btn btn-primary" id="btnSubmit">
+          Sign In
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="5" y1="12" x2="19" y2="12"></line>
             <polyline points="12 5 19 12 12 19"></polyline>
           </svg>
         </button>
-      </section>
-
-      <!-- STEP 2: 2FA Verification Code -->
-      <section class="form-step" id="step2">
-        <div class="2fa-info">
-          <p class="2fa-title">Enter 6-Digit Security Code</p>
-          <p class="2fa-desc">A verification code has been dispatched to your primary node device.</p>
-        </div>
-
-        <div class="otp-container" id="otpContainer">
-          <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" autofocus />
-          <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" />
-          <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" />
-          <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" />
-          <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" />
-          <input type="text" maxlength="1" class="otp-input" inputmode="numeric" pattern="[0-9]*" />
-        </div>
-
-        <div class="resend-wrapper">
-          <span>Didn't receive the code?</span>
-          <button type="button" class="link-btn" id="btnResend">Resend Code</button>
-        </div>
-
-        <div class="btn-group">
-          <button type="button" class="btn btn-secondary" id="btnBack">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="19" y1="12" x2="5" y2="12"></line>
-              <polyline points="12 19 5 12 12 5"></polyline>
-            </svg>
-            Back
-          </button>
-          <button type="submit" class="btn btn-primary" id="btnSubmit">
-            Verify & Authenticate
-          </button>
-        </div>
       </section>
 
       <!-- Success State Screen -->

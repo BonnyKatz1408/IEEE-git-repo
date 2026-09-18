@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WayPoint — Interactive Registration</title>
+    <title>WayPoint — Registration</title>
     <link rel="stylesheet" href="../static/css/registration.css">
 </head>
 <body>
 
     <canvas id="bg-canvas"></canvas>
 
-    <!-- Floating UI Node Badges duplicating the WayPoint background feel -->
+    <!-- Floating UI Node Badges -->
     <div id="node-overlay-container"></div>
 
     <!-- Header Brand -->
@@ -25,79 +25,31 @@
         <div class="card">
             
             <div id="form-content">
-                <div class="progress-header">
-                    <div class="progress-title">
-                        <h2 id="step-title">Create Account</h2>
-                        <span class="step-count" id="step-indicator">Step 1 of 2</span>
-                    </div>
-                    <div class="progress-track">
-                        <div class="progress-bar" id="progress-bar"></div>
-                    </div>
+                <div class="form-header">
+                    <h2>Create Account</h2>
                 </div>
 
                 <form id="registration-form" onsubmit="handleRegister(event)">
-                    <div class="steps-wrapper">
-                        
-                        <!-- STEP 1: Account Info -->
-                        <div class="step active" id="step-1">
-                            <div class="input-group">
-                                <label for="fullname">Full Name</label>
-                                <input type="text" id="fullname" class="input-control" placeholder="Alex Mercer" required>
-                            </div>
-                            <div class="input-group">
-                                <label for="email">Work Email</label>
-                                <input type="email" id="email" class="input-control" placeholder="alex@company.com" required>
-                            </div>
-                            <div class="input-group">
-                                <label for="password">Password</label>
-                                <input type="password" id="password" class="input-control" placeholder="••••••••••••" required minlength="8">
-                            </div>
-                            <div class="input-group">
-                                <label for="confirm-password">Confirm Password</label>
-                                <input type="password" id="confirm-password" class="input-control" placeholder="••••••••••••" required minlength="8">
-                                <div class="error-message" id="password-match-error">Passwords do not match.</div>
-                            </div>
-                        </div>
-
-                        <!-- STEP 2: Preferences / Role -->
-                        <div class="step" id="step-2">
-                            <div class="input-group">
-                                <label for="role">Primary Role</label>
-                                <select id="role" class="input-control" required>
-                                    <option value="" disabled selected>Select your role</option>
-                                    <option value="developer">Software Engineer / Developer</option>
-                                    <option value="architect">System Architect</option>
-                                    <option value="lead">Tech Lead / Engineering Manager</option>
-                                    <option value="devops">DevOps / Infrastructure</option>
-                                </select>
-                            </div>
-                            <div class="input-group">
-                                <label for="language">Primary Stack</label>
-                                <select id="language" class="input-control" required>
-                                    <option value="" disabled selected>Select primary language</option>
-                                    <option value="typescript">TypeScript / JavaScript</option>
-                                    <option value="python">Python</option>
-                                    <option value="go">Go</option>
-                                    <option value="rust">Rust</option>
-                                    <option value="java">Java / Kotlin</option>
-                                </select>
-                            </div>
-                            <div class="input-group">
-                                <label for="repo-url">Main Repository (Optional)</label>
-                                <input type="text" id="repo-url" class="input-control" placeholder="github.com/org/repo">
-                            </div>
-                        </div>
-
+                    <div class="input-group">
+                        <label for="fullname">Full Name</label>
+                        <input type="text" id="fullname" class="input-control" placeholder="Alex Mercer" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="email">Work Email</label>
+                        <input type="email" id="email" class="input-control" placeholder="alex@company.com" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" class="input-control" placeholder="••••••••••••" required minlength="8">
+                    </div>
+                    <div class="input-group">
+                        <label for="confirm-password">Confirm Password</label>
+                        <input type="password" id="confirm-password" class="input-control" placeholder="••••••••••••" required minlength="8">
+                        <div class="error-message" id="password-match-error">Passwords do not match.</div>
                     </div>
 
-                    <!-- Navigation Action Buttons -->
                     <div class="btn-group">
-                        <button type="button" class="btn btn-secondary" id="btn-back" style="display: none;" onclick="goToStep(1)">Back</button>
-                        <button type="button" class="btn btn-primary" id="btn-next" onclick="goToStep(2)">
-                            Continue
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                        </button>
-                        <button type="submit" class="btn btn-primary" id="btn-submit" style="display: none;">Complete Registration</button>
+                        <button type="submit" class="btn btn-primary" id="btn-submit">Create Account</button>
                     </div>
                 </form>
             </div>
@@ -109,7 +61,7 @@
                     </svg>
                 </div>
                 <h3>Welcome to WayPoint</h3>
-                <p>Your workspace is ready. We are mapping your repository dependencies in the background.</p>
+                <p>Your account is ready. Setting up your workspace now.</p>
             </div>
 
         </div>

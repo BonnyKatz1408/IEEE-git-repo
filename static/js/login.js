@@ -12,6 +12,7 @@ const nodeData = [
 
 function initNodes() {
   const container = document.getElementById('nodeContainer');
+  if (!container) return;
   nodeData.forEach(node => {
     const el = document.createElement('div');
     el.className = 'node-box';
@@ -24,10 +25,11 @@ function initNodes() {
 
 // --- 2. Interactive Canvas Particle Mesh ---
 const canvas = document.getElementById('bgCanvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas ? canvas.getContext('2d') : null;
 let particles = [];
 
 function resizeCanvas() {
+  if (!canvas) return;
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 }
@@ -58,6 +60,7 @@ class Particle {
 }
 
 function initParticles() {
+  if (!canvas) return;
   particles = [];
   const count = Math.floor((canvas.width * canvas.height) / 12000);
   for (let i = 0; i < count; i++) {
@@ -66,6 +69,7 @@ function initParticles() {
 }
 
 function animateCanvas() {
+  if (!ctx) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   for (let i = 0; i < particles.length; i++) {
@@ -90,137 +94,96 @@ function animateCanvas() {
   requestAnimationFrame(animateCanvas);
 }
 
-// --- 3. Form Handling & Logic ---
+// --- 3. Form Handling & Authentication ---
 const step1 = document.getElementById('step1');
-const step2 = document.getElementById('step2');
 const stepSuccess = document.getElementById('stepSuccess');
-
-const btnStep1 = document.getElementById('btnStep1');
-const btnBack = document.getElementById('btnBack');
 const loginForm = document.getElementById('loginForm');
 const alertBox = document.getElementById('alertBox');
-
-const stepBadge1 = document.getElementById('stepBadge1');
-const stepBadge2 = document.getElementById('stepBadge2');
-
 const togglePassword = document.getElementById('togglePassword');
 const passwordInput = document.getElementById('password');
-const otpInputs = document.querySelectorAll('.otp-input');
+const btnSubmit = document.getElementById('btnSubmit');
 
 function showAlert(msg) {
+  if (!alertBox) return;
   alertBox.textContent = msg;
   alertBox.className = 'alert-box error';
+  alertBox.style.display = 'block';
 }
 
 function clearAlert() {
+  if (!alertBox) return;
   alertBox.textContent = '';
   alertBox.className = 'alert-box';
+  alertBox.style.display = 'none';
 }
 
 // Password Reveal Toggle
-togglePassword.addEventListener('click', () => {
+togglePassword?.addEventListener('click', () => {
   const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
   passwordInput.setAttribute('type', type);
 });
 
-// Step 1 -> Step 2 Navigation
-btnStep1.addEventListener('click', () => {
+// Form Submission (Connected to Flask API)
+loginForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
   clearAlert();
-  const username = document.getElementById('username').value.trim();
-  const password = passwordInput.value;
 
-  if (!username || !password) {
+  const email = document.getElementById('username').value.trim();
+  const password = passwordInput.value;
+  const remember = document.getElementById('rememberMe')?.checked || false;
+
+  if (!email || !password) {
     showAlert('Please fill in all required fields.');
     return;
   }
 
-  // Smooth transition to Step 2
-  step1.classList.remove('active');
-  setTimeout(() => {
-    step2.classList.add('active');
-    stepBadge1.classList.remove('active');
-    stepBadge1.classList.add('completed');
-    stepBadge2.classList.add('active');
-    otpInputs[0].focus();
-  }, 200);
-});
-
-// Step 2 -> Step 1 Navigation
-btnBack.addEventListener('click', () => {
-  clearAlert();
-  step2.classList.remove('active');
-  setTimeout(() => {
-    step1.classList.add('active');
-    stepBadge2.classList.remove('active');
-    stepBadge1.classList.remove('completed');
-    stepBadge1.classList.add('active');
-  }, 200);
-});
-
-// OTP Input Navigation Helpers
-otpInputs.forEach((input, index) => {
-  input.addEventListener('input', (e) => {
-    if (e.target.value.length === 1 && index < otpInputs.length - 1) {
-      otpInputs[index + 1].focus();
-    }
-  });
-
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Backspace' && !e.target.value && index > 0) {
-      otpInputs[index - 1].focus();
-    }
-  });
-
-  input.addEventListener('paste', (e) => {
-    e.preventDefault();
-    const data = e.clipboardData.getData('text').trim();
-    if (/^\d{6}$/.test(data)) {
-      data.split('').forEach((char, i) => {
-        if (otpInputs[i]) otpInputs[i].value = char;
-      });
-      otpInputs[5].focus();
-    }
-  });
-});
-
-// Form Submission (Final Verification)
-loginForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  clearAlert();
-
-  let code = '';
-  otpInputs.forEach(i => code += i.value);
-
-  if (code.length < 6) {
-    showAlert('Please enter the complete 6-digit security code.');
-    return;
+  // Disable button while processing
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.style.opacity = '0.7';
   }
 
-  // Complete Authentication
-  step2.classList.remove('active');
-  setTimeout(() => {
-    stepSuccess.classList.add('active');
-    stepBadge2.classList.remove('active');
-    stepBadge2.classList.add('completed');
-  }, 200);
+  try {
+    const res = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, remember })
+    });
+
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      step1.classList.remove('active');
+      setTimeout(() => {
+        stepSuccess.classList.add('active');
+      }, 200);
+
+      // Redirect to the dashboard after brief animation
+      setTimeout(() => {
+        window.location.href = data.redirect || '/analyze';
+      }, 1200);
+    } else {
+      showAlert(data.message || 'Authentication failed. Please check your credentials.');
+    }
+  } catch (err) {
+    showAlert('Network error. Failed to reach authentication node.');
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.style.opacity = '1';
+    }
+  }
 });
 
-// Reset Demo
+// Reset Demo State
 document.getElementById('btnReset')?.addEventListener('click', () => {
   loginForm.reset();
   clearAlert();
   stepSuccess.classList.remove('active');
   step1.classList.add('active');
-  stepBadge1.className = 'step-badge active';
-  stepBadge2.className = 'step-badge';
 });
 
-// Resend Code Trigger
-document.getElementById('btnResend').addEventListener('click', () => {
-  alert('A new 6-digit verification code has been dispatched.');
-});
-
-// Initialize canvas and nodes on load
+// Window Listeners
 window.addEventListener('resize', () => {
   resizeCanvas();
   initParticles();
