@@ -12,9 +12,14 @@ const mapCanvas = document.getElementById('map-canvas');
 const mapTooltip = document.getElementById('map-tooltip');
 const mapSidebar = document.getElementById('map-sidebar');
 const mapStats = document.getElementById('map-stats');
-const analysisSummary = document.getElementById('analysis-summary');
+const analysisInspector = document.getElementById('analysis-inspector');
+const resetViewButton = document.getElementById('reset-view-btn');
+
+const HOTSPOT_ROOF = 0xf28a2d;
+const HOTSPOT_EMPHASIS = 0xff5a36;
 
 let activeMap = null;
+let currentAnalysis = null;
 
 function showMessage(message, kind = 'error') {
     formMessage.textContent = message;
@@ -27,106 +32,122 @@ function setLoading(loading) {
 }
 
 function fileName(path) {
-    return path.split('/').pop() || path;
+    return String(path || '').split('/').pop() || path;
 }
 
 function metric(value) {
     return Number.isFinite(Number(value)) ? Number(value).toLocaleString() : '0';
 }
 
-function normalizeReport(report) {
-    const hotspotFiles = new Set((report.hotspots?.files || []).map((item) => item.file));
-    const entryFiles = new Set((report.entry_points || []).map((item) => item.file));
-    const modules = (report.modules || []).map((module, moduleIndex) => ({
-        id: module.module || `module-${moduleIndex}`,
-        name: module.module || 'root',
-        files: module.files || [],
-        index: moduleIndex,
-    }));
-    const moduleByFile = new Map();
-    modules.forEach((module) => module.files.forEach((path) => moduleByFile.set(path, module)));
-
-    const files = (report.file_metrics || []).map((raw, index) => {
-        const path = raw.file || `file-${index}`;
-        const module = moduleByFile.get(path);
-        return {
-            id: path,
-            path,
-            name: fileName(path),
-            module: module?.name || path.split('/')[0] || 'root',
-            moduleIndex: module?.index ?? 0,
-            loc: Number(raw.loc) || 1,
-            functions: Number(raw.number_of_defined_functions) || 0,
-            hotspot: Number(raw.hotspot_score) || 0,
-            isHotspot: hotspotFiles.has(path) || Number(raw.hotspot_score) > 0.65,
-            fanIn: (Number(raw.incoming_import_dependencies) || 0) + (Number(raw.incoming_call_dependencies) || 0),
-            fanOut: (Number(raw.outgoing_import_dependencies) || 0) + (Number(raw.outgoing_call_dependencies) || 0),
-            entry: Boolean(raw.is_entry_point) || entryFiles.has(path),
-        };
-    });
-    const fileById = new Map(files.map((file) => [file.id, file]));
-    const calls = (report.function_edges || []).map((edge) => ({
-        from: edge.from,
-        to: edge.to,
-        fromFile: String(edge.from || '').split('::')[0],
-        toFile: String(edge.to || '').split('::')[0],
-    }));
-    const callByPair = new Map();
-    calls.forEach((call) => callByPair.set(`${call.fromFile}\n${call.toFile}`, call));
-    const edges = (report.architecture_edges || [])
-        .map((edge) => {
-            const from = fileById.get(String(edge.from));
-            const to = fileById.get(String(edge.to));
-            const call = callByPair.get(`${String(edge.from)}\n${String(edge.to)}`);
-            return { from, to, call, weight: (edge.import_count || 0) + (edge.call_count || 0) };
-        })
-        .filter((edge) => edge.from && edge.to && edge.from.id !== edge.to.id);
-
-    const hotspotEdges = edges.filter((edge) => edge.from.isHotspot || edge.to.isHotspot);
-    return { overview: report.overview || {}, modules, files, edges, hotspotEdges, report };
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 }
 
 function colorForModule(index) {
     const colors = [
-        0x3f72c8, 0x18a999, 0x8557b8, 0xc44770, 0x2f9fc0, 0x6b9144,
-        0x5f61c7, 0x9d5a36, 0x237f9b, 0xb23d91, 0x4e8b72, 0x7b6db2,
-        0x2f6f9f, 0xa86d2d, 0x347f62, 0x99516e,
+        0x1f7ab8, 0x1eaf9f, 0x8b5dc7, 0xd15a8b, 0x2e9ccf, 0x4d9d5e,
+        0x4c6edb, 0xe2913d, 0x3a9bb0, 0xc759a6, 0x3f9f89, 0x667ac9,
+        0x1e79a8, 0xb56b3d, 0x2e7f6a, 0x9a4c72,
     ];
     return colors[index % colors.length];
+}
+
+function mixHexColors(a, b, amount) {
+    const start = Number(a);
+    const end = Number(b);
+    const r = Math.round(((start >> 16) & 255) * (1 - amount) + ((end >> 16) & 255) * amount);
+    const g = Math.round(((start >> 8) & 255) * (1 - amount) + ((end >> 8) & 255) * amount);
+    const bChannel = Math.round((start & 255) * (1 - amount) + (end & 255) * amount);
+    return (r << 16) | (g << 8) | bChannel;
+}
+
+function pastelPlateColor(hex) {
+    return mixHexColors(hex, 0xf4f1ee, 0.72);
 }
 
 function makeLabel(text, color) {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     if (!context) return null;
-    const scale = 2;
-    context.font = '700 22px monospace';
-    const width = Math.ceil(context.measureText(text).width) + 24;
-    canvas.width = width * scale;
-    canvas.height = 38 * scale;
-    context.scale(scale, scale);
-    context.font = '700 22px monospace';
+    const fontSize = 26;
+    const paddingX = 18;
+    const paddingY = 18;
+    context.font = `700 ${fontSize}px monospace`;
+    const width = Math.ceil(context.measureText(text).width) + paddingX * 2;
+    const height = Math.ceil(fontSize + paddingY * 1.4);
+    const backingScale = 3;
+    canvas.width = width * backingScale;
+    canvas.height = height * backingScale;
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.scale(backingScale, backingScale);
+    context.clearRect(0, 0, width, height);
+    context.font = `700 ${fontSize}px monospace`;
+    context.textBaseline = 'middle';
+    context.textAlign = 'left';
     context.fillStyle = 'rgba(255, 255, 255, 0.94)';
-    context.fillRect(0, 0, width, 38);
+    context.fillRect(0, 0, width, height);
     context.fillStyle = color;
-    context.fillText(text, 12, 26);
+    context.fillText(text, paddingX, height / 2 + 1);
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
-    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false });
+    texture.needsUpdate = true;
+    const material = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        alphaTest: 0.05,
+    });
     const sprite = new THREE.Sprite(material);
     sprite.renderOrder = 1000;
-    sprite.scale.set(width / 2.8, 11, 1);
+    sprite.scale.set(width / 4.2, height / 4.2, 1);
     return sprite;
 }
 
-function mapLabelScale(moduleCount) {
-    return Math.max(1.25, Math.min(2.1, 1.8 - moduleCount * 0.05));
+function mapData(report) {
+    const layout = report.map || {};
+    const files = (layout.buildings || []).map((item) => ({
+        ...item,
+        isHotspot: item.is_hotspot || item.isHotspot,
+        fanIn: item.fan_in ?? item.fanIn,
+        fanOut: item.fan_out ?? item.fanOut,
+        moduleIndex: item.module_index ?? item.moduleIndex ?? 0,
+    }));
+    return {
+        report,
+        overview: report.overview || {},
+        modules: layout.modules || [],
+        districts: layout.districts || [],
+        files,
+        fileById: new Map(files.map((file) => [file.id, file])),
+        fileEdges: layout.file_edges || [],
+        moduleEdges: layout.module_edges || [],
+        districtEdges: layout.district_edges || [],
+        importantFiles: new Set(layout.important_files || []),
+        bounds: layout.bounds || { min_x: -80, max_x: 80, min_z: -80, max_z: 80, max_y: 40 },
+    };
+}
+
+function createArc(from, to, color, opacity, radius = 0.7) {
+    const start = new THREE.Vector3(from.x, from.y, from.z);
+    const end = new THREE.Vector3(to.x, to.y, to.z);
+    const distance = start.distanceTo(end);
+    const control = new THREE.Vector3(
+        (start.x + end.x) / 2,
+        Math.max(start.y, end.y) + 28 + Math.min(42, distance * 0.12),
+        (start.z + end.z) / 2,
+    );
+    const curve = new THREE.QuadraticBezierCurve3(start, control, end);
+    const geometry = new THREE.TubeGeometry(curve, 16, radius, 5, false);
+    const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity });
+    const mesh = new THREE.Mesh(geometry, material);
+    return mesh;
 }
 
 function createMap(report, onHover, onEdgeHover = () => {}) {
-    const data = normalizeReport(report);
+    const data = mapData(report);
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf8f7f4);
+    scene.background = new THREE.Color(0xf3f1ee);
     const width = Math.max(1, mapCanvas.clientWidth);
     const height = Math.max(1, mapCanvas.clientHeight);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -142,154 +163,158 @@ function createMap(report, onHover, onEdgeHover = () => {}) {
 
     const root = new THREE.Group();
     scene.add(root);
-    const positions = new Map();
-    const districtObjects = new Map();
-    const columns = Math.max(1, Math.ceil(Math.sqrt(Math.max(data.modules.length, 1))));
-    const moduleRows = Math.max(1, Math.ceil(data.modules.length / columns));
-    const moduleLayouts = data.modules.map((module) => {
-        const fileCount = data.files.filter((file) => file.module === module.name).length;
-        const fileColumns = Math.max(1, Math.ceil(Math.sqrt(fileCount)));
-        const fileRows = Math.max(1, Math.ceil(fileCount / fileColumns));
-        return {
-            fileColumns,
-            fileRows,
-            width: Math.max(80, fileColumns * 24 + 34),
-            depth: Math.max(80, fileRows * 24 + 34),
-        };
-    });
-    const cellSize = Math.max(190, ...moduleLayouts.map((layout) => Math.max(layout.width, layout.depth) + 70));
-    const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity, maxY: 0 };
-
-    data.modules.forEach((module, moduleIndex) => {
-        const moduleFiles = data.files.filter((file) => file.module === module.name);
-        if (!moduleFiles.length) return;
-        const moduleColumn = moduleIndex % columns;
-        const moduleRow = Math.floor(moduleIndex / columns);
-        const baseX = (moduleColumn - (columns - 1) / 2) * cellSize;
-        const baseZ = (moduleRow - (moduleRows - 1) / 2) * cellSize;
-        const layout = moduleLayouts[moduleIndex];
-        const moduleColumns = layout.fileColumns;
-        const plateWidth = layout.width;
-        const plateDepth = layout.depth;
-        const plate = new THREE.Mesh(
-            new THREE.BoxGeometry(plateWidth, 5, plateDepth),
-            new THREE.MeshStandardMaterial({ color: colorForModule(moduleIndex), transparent: true, opacity: 0.16, roughness: 0.9 }),
-        );
-        const districtGroup = { plate, label: null, objects: [], visible: true };
-        districtObjects.set(module.name, districtGroup);
-        plate.position.set(baseX, -3, baseZ);
-        root.add(plate);
-        bounds.minX = Math.min(bounds.minX, baseX - plateWidth / 2);
-        bounds.maxX = Math.max(bounds.maxX, baseX + plateWidth / 2);
-        bounds.minZ = Math.min(bounds.minZ, baseZ - plateDepth / 2);
-        bounds.maxZ = Math.max(bounds.maxZ, baseZ + plateDepth / 2);
-
-        const label = makeLabel(module.name.toUpperCase(), '#49637c');
-        if (label) {
-            label.position.set(baseX, 14, baseZ - plateDepth / 2 - 8);
-            label.scale.multiplyScalar(Math.max(1, mapLabelScale(data.modules.length)));
-            root.add(label);
-            districtGroup.label = label;
-        }
-
-        moduleFiles.forEach((file, fileIndex) => {
-            const column = fileIndex % moduleColumns;
-            const row = Math.floor(fileIndex / moduleColumns);
-            const x = baseX + (column - (moduleColumns - 1) / 2) * 24;
-            const z = baseZ + (row - (moduleColumns - 1) / 2) * 24;
-            const buildingHeight = Math.max(8, Math.min(file.isHotspot ? 155 : 115, Math.log1p(file.loc) * (file.isHotspot ? 18 : 14)));
-            const buildingWidth = Math.max(file.isHotspot ? 15 : 10, Math.min(file.isHotspot ? 25 : 18, (10 + file.functions * 0.25 + file.fanOut * 0.5) * (file.isHotspot ? 1.3 : 1)));
-            const buildingDepth = Math.max(file.isHotspot ? 15 : 10, Math.min(file.isHotspot ? 25 : 18, (10 + file.fanIn * 0.45 + file.loc / 500) * (file.isHotspot ? 1.3 : 1)));
-            bounds.maxY = Math.max(bounds.maxY, buildingHeight);
-            const isHotspot = file.isHotspot;
-            const bodyMaterial = new THREE.MeshStandardMaterial({
-                color: colorForModule(moduleIndex),
-                roughness: 0.68,
-                metalness: 0.04,
-                emissive: file.entry ? 0x214f61 : 0x000000,
-                emissiveIntensity: file.entry ? 0.7 : 0,
-            });
-            const roofMaterial = new THREE.MeshStandardMaterial({
-                color: isHotspot ? 0xff9f43 : colorForModule(moduleIndex),
-                roughness: 0.6,
-                metalness: 0.04,
-                emissive: file.entry ? 0x214f61 : 0x000000,
-                emissiveIntensity: file.entry ? 0.7 : 0,
-            });
-            const building = new THREE.Mesh(
-                new THREE.BoxGeometry(buildingWidth, buildingHeight, buildingDepth),
-                [bodyMaterial, bodyMaterial, roofMaterial, bodyMaterial, bodyMaterial, bodyMaterial],
-            );
-            building.position.set(x, buildingHeight / 2, z);
-            building.userData.file = file;
-            building.castShadow = true;
-            root.add(building);
-            districtGroup.objects.push(building);
-            positions.set(file.id, { x, y: buildingHeight + 2, z });
-
-            if (file.entry) {
-                const beacon = new THREE.Mesh(
-                    new THREE.CylinderGeometry(2.6, 2.6, 3, 12),
-                    new THREE.MeshStandardMaterial({ color: 0x78e0e8, emissive: 0x78e0e8, emissiveIntensity: 0.8 }),
-                );
-                beacon.position.set(x, buildingHeight + 3, z);
-                root.add(beacon);
-                districtGroup.objects.push(beacon);
-            }
-        });
-    });
-
-    const centerX = (bounds.minX + bounds.maxX) / 2 || 0;
-    const centerZ = (bounds.minZ + bounds.maxZ) / 2 || 0;
-    const mapSpan = Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 100);
-    const groundSize = Math.max(mapSpan * 3.2, 720);
+    const bounds = data.bounds;
+    const centerX = ((bounds.min_x + bounds.max_x) / 2) || 0;
+    const centerZ = ((bounds.min_z + bounds.max_z) / 2) || 0;
+    const mapSpan = Math.max(bounds.max_x - bounds.min_x, bounds.max_z - bounds.min_z, 100);
     const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(groundSize, groundSize),
-        new THREE.MeshStandardMaterial({ color: 0xf8f7f4, roughness: 1, metalness: 0 }),
+        new THREE.PlaneGeometry(Math.max(mapSpan * 3.2, 720), Math.max(mapSpan * 3.2, 720)),
+        new THREE.MeshStandardMaterial({ color: 0xf6f3ef, roughness: 1, metalness: 0 }),
     );
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -7;
-    ground.position.x = centerX;
-    ground.position.z = centerZ;
-    ground.receiveShadow = true;
+    ground.position.set(centerX, -7, centerZ);
     root.add(ground);
-
-    const grid = new THREE.GridHelper(Math.max(mapSpan * 2.8, 640), 48, 0xc8d0d8, 0xe1e5e8);
-    grid.position.y = -6.8;
-    grid.position.x = centerX;
-    grid.position.z = centerZ;
+    const grid = new THREE.GridHelper(Math.max(mapSpan * 2.8, 640), 48, 0xc4ced9, 0xdfe5ee);
+    grid.position.set(centerX, -6.8, centerZ);
     root.add(grid);
 
-    const edgeMaterial = new THREE.MeshBasicMaterial({ color: 0x7892ad, transparent: true, opacity: 0.2 });
-    const connectionObjects = [];
-    const visibleEdges = data.edges
-        .sort((a, b) => b.weight - a.weight)
-        .slice(0, 120);
-    visibleEdges.forEach((edge) => {
-        const from = positions.get(edge.from.id);
-        const to = positions.get(edge.to.id);
-        if (!from || !to) return;
-        const start = new THREE.Vector3(from.x, from.y, from.z);
-        const end = new THREE.Vector3(to.x, to.y, to.z);
-        const distance = start.distanceTo(end);
-        const control = new THREE.Vector3(
-            (start.x + end.x) / 2,
-            Math.max(start.y, end.y) + 28 + Math.min(42, distance * 0.12),
-            (start.z + end.z) / 2,
+    const districtObjects = new Map();
+    const moduleObjects = new Map();
+    const buildings = [];
+    const positions = new Map();
+    const districtLabels = [];
+    const moduleLabels = [];
+    const fileLabels = [];
+
+    data.districts.forEach((district) => {
+        const plateColor = district.color ? pastelPlateColor(district.color) : 0xe9edf3;
+        const plate = new THREE.Mesh(
+            new THREE.BoxGeometry(district.width, 3, district.depth),
+            new THREE.MeshStandardMaterial({ color: plateColor, transparent: true, opacity: 0.9, roughness: 1 }),
         );
-        const curve = new THREE.QuadraticBezierCurve3(start, control, end);
-        const geometry = new THREE.TubeGeometry(curve, 24, 0.65, 6, false);
-        const connection = new THREE.Mesh(geometry, edgeMaterial.clone());
-        connection.userData.edge = edge;
-        connection.visible = Boolean(edge.from.isHotspot || edge.to.isHotspot);
-        connectionObjects.push(connection);
-        root.add(connection);
+        plate.position.set(district.x, -5.2, district.z);
+        root.add(plate);
+        const label = makeLabel(String(district.name).toUpperCase(), '#3d5368');
+        if (label) {
+            label.position.set(district.x, 28, district.z - district.depth / 2 - 10);
+            label.scale.multiplyScalar(1.8);
+            root.add(label);
+            districtLabels.push(label);
+        }
+        districtObjects.set(district.id, { plate, label, visible: true });
+    });
+
+    data.modules.forEach((module) => {
+        const plateColor = module.color ? pastelPlateColor(module.color) : pastelPlateColor(colorForModule(module.index || 0));
+        const plate = new THREE.Mesh(
+            new THREE.BoxGeometry(module.width, 5, module.depth),
+            new THREE.MeshStandardMaterial({ color: plateColor, transparent: true, opacity: 0.98, roughness: 0.75 }),
+        );
+        plate.position.set(module.x, -3, module.z);
+        root.add(plate);
+        const label = makeLabel(String(module.name).toUpperCase(), '#49637c');
+        if (label) {
+            label.position.set(module.x, 16, module.z - module.depth / 2 - 10);
+            label.scale.multiplyScalar(1.5);
+            root.add(label);
+            moduleLabels.push(label);
+        }
+        moduleObjects.set(module.id, { plate, label, objects: [], visible: true });
+    });
+
+    data.files.forEach((file) => {
+        const moduleColor = colorForModule(file.moduleIndex);
+        const bodyMaterial = new THREE.MeshStandardMaterial({
+            color: moduleColor,
+            roughness: 0.68,
+            metalness: 0.04,
+            emissive: file.isHotspot ? HOTSPOT_EMPHASIS : file.entry ? 0x214f61 : 0x000000,
+            emissiveIntensity: file.isHotspot ? 0.55 : file.entry ? 0.7 : 0,
+        });
+        const roofMaterial = new THREE.MeshStandardMaterial({
+            color: file.isHotspot ? HOTSPOT_ROOF : moduleColor,
+            roughness: 0.45,
+            metalness: 0.1,
+            emissive: 0x000000,
+            emissiveIntensity: 0,
+        });
+        const building = new THREE.Mesh(
+            new THREE.BoxGeometry(file.width, file.height, file.depth),
+            [bodyMaterial, bodyMaterial, roofMaterial, bodyMaterial, bodyMaterial, bodyMaterial],
+        );
+        building.position.set(file.x, file.height / 2, file.z);
+        building.userData.file = file;
+        root.add(building);
+        buildings.push(building);
+        positions.set(file.id, { x: file.x, y: file.height + 2, z: file.z });
+        moduleObjects.get(file.module)?.objects.push(building);
+        if (file.entry) {
+            const beacon = new THREE.Mesh(
+                new THREE.CylinderGeometry(2.6, 2.6, 3, 12),
+                new THREE.MeshStandardMaterial({ color: 0x78e0e8, emissive: 0x78e0e8, emissiveIntensity: 0.8 }),
+            );
+            beacon.position.set(file.x, file.height + 3, file.z);
+            root.add(beacon);
+            moduleObjects.get(file.module)?.objects.push(beacon);
+        }
+        if (file.isHotspot || file.entry) {
+            const label = makeLabel(file.name, file.isHotspot ? '#b45309' : '#0f766e');
+            if (label) {
+                label.position.set(file.x, file.height + 15, file.z);
+                label.scale.multiplyScalar(1.2);
+                label.userData.fileId = file.id;
+                root.add(label);
+                fileLabels.push(label);
+            }
+        }
+    });
+
+    const districtArcs = [];
+    data.districtEdges.forEach((edge) => {
+        const from = data.districts.find((item) => item.id === edge.from);
+        const to = data.districts.find((item) => item.id === edge.to);
+        if (!from || !to) return;
+        const mesh = createArc({ x: from.x, y: 18, z: from.z }, { x: to.x, y: 18, z: to.z }, 0x5b7c99, 0.28, 1.4);
+        mesh.userData.kind = 'district';
+        root.add(mesh);
+        districtArcs.push(mesh);
+    });
+    const moduleArcs = [];
+    data.moduleEdges.forEach((edge) => {
+        const from = data.modules.find((item) => item.id === edge.from);
+        const to = data.modules.find((item) => item.id === edge.to);
+        if (!from || !to) return;
+        const mesh = createArc({ x: from.x, y: 16, z: from.z }, { x: to.x, y: 16, z: to.z }, 0x6d8bab, 0.22, 0.9);
+        mesh.userData.kind = 'module';
+        root.add(mesh);
+        moduleArcs.push(mesh);
+    });
+    const fileArcs = [];
+    data.fileEdges.slice(0, 80).forEach((edge) => {
+        const from = positions.get(edge.from);
+        const to = positions.get(edge.to);
+        if (!from || !to) return;
+        const source = data.fileById.get(edge.from);
+        const target = data.fileById.get(edge.to);
+        const mesh = createArc(from, to, 0x7892ad, 0.2, 0.55);
+        mesh.userData.edge = { ...edge, from: source, to: target };
+        mesh.visible = Boolean(source?.isHotspot || target?.isHotspot);
+        root.add(mesh);
+        fileArcs.push(mesh);
     });
 
     const camera = new THREE.OrthographicCamera(-width / 2, width / 2, height / 2, -height / 2, 0.1, mapSpan * 8 + 1000);
-    camera.position.set(centerX + mapSpan * 0.9, bounds.maxY + mapSpan * 0.82, centerZ + mapSpan * 0.9);
-    camera.lookAt(centerX, 0, centerZ);
-    camera.zoom = (Math.min(width, height) / (mapSpan * 1.3)) * 1.12;
+    const defaultCameraState = {
+        position: new THREE.Vector3(centerX + mapSpan * 0.9, (bounds.max_y || 40) + mapSpan * 0.82, centerZ + mapSpan * 0.9),
+        target: new THREE.Vector3(centerX, 0, centerZ),
+        zoom: (Math.min(width, height) / (mapSpan * 1.3)) * 1.12,
+        minZoom: 0.45,
+        maxZoom: 4,
+        enableRotate: false,
+    };
+    camera.position.copy(defaultCameraState.position);
+    camera.lookAt(defaultCameraState.target);
+    camera.zoom = defaultCameraState.zoom;
     camera.updateProjectionMatrix();
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -299,54 +324,96 @@ function createMap(report, onHover, onEdgeHover = () => {}) {
     controls.screenSpacePanning = true;
     controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
     controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
-    controls.minZoom = 0.45;
-    controls.maxZoom = 4;
-    controls.target.set(centerX, 0, centerZ);
+    controls.minZoom = defaultCameraState.minZoom;
+    controls.maxZoom = defaultCameraState.maxZoom;
+    controls.target.copy(defaultCameraState.target);
     controls.update();
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
-    const buildings = root.children.filter((object) => object.userData.file);
     let hovered = null;
     let selectedBuilding = null;
 
+    function setBuildingEmphasis(building, selected) {
+        if (!building) return;
+        const file = building.userData.file;
+        const materials = Array.isArray(building.material) ? building.material : [building.material];
+        materials.forEach((material, index) => {
+            const isRoof = index === 2;
+            if (isRoof) {
+                material.color.setHex(file.isHotspot ? HOTSPOT_ROOF : colorForModule(file.moduleIndex));
+                material.emissive.setHex(selected ? 0xffffff : 0x000000);
+                material.emissiveIntensity = selected ? 0.18 : 0;
+                return;
+            }
+            material.color.setHex(colorForModule(file.moduleIndex));
+            material.emissive.setHex(selected ? 0xffffff : file.isHotspot ? HOTSPOT_EMPHASIS : file.entry ? 0x214f61 : 0x000000);
+            material.emissiveIntensity = selected ? 0.45 : file.isHotspot ? 0.55 : file.entry ? 0.8 : 0;
+        });
+    }
+
     function showConnectionsFor(file) {
-        connectionObjects.forEach((connection) => {
+        fileArcs.forEach((connection) => {
             const edge = connection.userData.edge;
             connection.visible = Boolean(
-                edge.from.isHotspot || edge.to.isHotspot ||
+                edge?.from?.isHotspot || edge?.to?.isHotspot ||
                 (file && (edge.from.id === file.id || edge.to.id === file.id)),
             );
         });
     }
 
-    function toggleDistrict(moduleName) {
-        const district = districtObjects.get(moduleName);
-        if (!district) return false;
-        district.visible = !district.visible;
-        const opacity = district.visible ? 1 : 0.16;
-        const setOpacity = (object) => {
-            const materials = Array.isArray(object.material) ? object.material : [object.material];
-            materials.forEach((material) => {
-                material.transparent = true;
-                material.opacity = opacity;
-                material.needsUpdate = true;
-            });
-        };
-        setOpacity(district.plate);
-        district.objects.forEach(setOpacity);
-        if (district.label?.material) district.label.material.opacity = district.visible ? 1 : 0.16;
-        return district.visible;
+    function lodLevel() {
+        const relative = camera.zoom / defaultCameraState.zoom;
+        if (relative < 0.72) return 'districts';
+        if (relative < 0.95) return 'modules';
+        if (relative < 1.55) return 'important';
+        return 'detail';
     }
 
-    function setBuildingEmphasis(building, selected) {
-        if (!building) return;
-        const materials = Array.isArray(building.material) ? building.material : [building.material];
-        materials.forEach((material, index) => {
-            material.emissive.setHex(selected ? 0xffffff : building.userData.file.entry ? 0x214f61 : 0x000000);
-            material.emissiveIntensity = selected ? 0.35 : building.userData.file.entry ? 0.7 : 0;
-            if (!selected && index === 2) material.color.setHex(building.userData.file.isHotspot ? 0xff9f43 : colorForModule(building.userData.file.moduleIndex));
+    function updateLod() {
+        const level = lodLevel();
+        const target = controls.target;
+        districtLabels.forEach((label, index) => {
+            label.visible = level === 'districts' && index < 24;
         });
+        moduleLabels.forEach((label, index) => {
+            label.visible = (level === 'modules' || level === 'important') && index < 36;
+        });
+        buildings.forEach((building) => {
+            const file = building.userData.file;
+            const important = file.isHotspot || file.entry || data.importantFiles.has(file.id);
+            const dx = file.x - target.x;
+            const dz = file.z - target.z;
+            const near = (dx * dx + dz * dz) < (mapSpan * 0.18) ** 2;
+            if (level === 'districts') building.visible = false;
+            else if (level === 'modules') building.visible = important;
+            else if (level === 'important') building.visible = important;
+            else building.visible = important || near;
+        });
+        fileLabels.forEach((label, index) => {
+            label.visible = (level === 'important' || level === 'detail') && index < 18;
+        });
+        districtArcs.forEach((arc) => { arc.visible = level === 'districts'; });
+        moduleArcs.forEach((arc) => { arc.visible = level === 'modules' || level === 'important'; });
+        if (level === 'districts' || level === 'modules') {
+            fileArcs.forEach((arc) => { arc.visible = false; });
+        } else {
+            showConnectionsFor(selectedBuilding?.userData.file || null);
+        }
+        data.districts.forEach((district) => {
+            const object = districtObjects.get(district.id);
+            if (object?.plate) object.plate.visible = level === 'districts';
+        });
+    }
+
+    function clearSelection() {
+        if (selectedBuilding) {
+            setBuildingEmphasis(selectedBuilding, false);
+            selectedBuilding = null;
+        }
+        showConnectionsFor(null);
+        analysisInspector.classList.add('hidden');
+        updateLod();
     }
 
     function pick(event) {
@@ -354,47 +421,45 @@ function createMap(report, onHover, onEdgeHover = () => {}) {
         pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(pointer, camera);
-        return raycaster.intersectObjects(buildings, false)[0]?.object?.userData.file || null;
-    }
-
-    function pickConnection(event) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-        raycaster.setFromCamera(pointer, camera);
-        return raycaster.intersectObjects(connectionObjects, false)[0]?.object?.userData.edge || null;
+        const hits = raycaster.intersectObjects(buildings.filter((item) => item.visible), false);
+        return hits[0]?.object || null;
     }
 
     function pointerMove(event) {
-        const file = pick(event);
-        const edge = file ? null : pickConnection(event);
-        const building = raycaster.intersectObjects(buildings, false)[0]?.object || null;
-        if (hovered && hovered !== file) setBuildingEmphasis(hovered.__mesh, false);
-        if (building) setBuildingEmphasis(building, true);
-        hovered = file;
-        if (file) file.__mesh = building;
-        renderer.domElement.style.cursor = file || edge ? 'pointer' : 'default';
+        const hit = pick(event);
+        const file = hit?.userData.file || null;
+        const edgeHit = file ? null : raycaster.intersectObjects(fileArcs.filter((item) => item.visible), false)[0]?.object?.userData.edge || null;
+        if (hovered && hovered !== hit && hovered !== selectedBuilding) setBuildingEmphasis(hovered, false);
+        if (hit) setBuildingEmphasis(hit, true);
+        hovered = hit;
+        renderer.domElement.style.cursor = file || edgeHit ? 'pointer' : 'default';
         onHover(file, event);
-        onEdgeHover(edge, event);
+        onEdgeHover(edgeHit, event);
     }
 
     function pointerDown(event) {
-        const file = pick(event);
-        const hit = raycaster.intersectObjects(buildings, false)[0]?.object || null;
+        const hit = pick(event);
+        if (!hit) {
+            clearSelection();
+            return;
+        }
         if (selectedBuilding && selectedBuilding !== hit) setBuildingEmphasis(selectedBuilding, false);
         selectedBuilding = hit;
         setBuildingEmphasis(selectedBuilding, true);
+        const file = hit.userData.file;
         showConnectionsFor(file);
+        renderInspectorForFile(currentAnalysis, file.path);
     }
 
     renderer.domElement.addEventListener('pointermove', pointerMove);
     renderer.domElement.addEventListener('pointerdown', pointerDown);
     renderer.domElement.addEventListener('pointerleave', () => {
-        if (hovered?.__mesh && hovered.__mesh !== selectedBuilding) setBuildingEmphasis(hovered.__mesh, false);
+        if (hovered && hovered !== selectedBuilding) setBuildingEmphasis(hovered, false);
         hovered = null;
         onHover(null);
         onEdgeHover(null);
     });
+    controls.addEventListener('change', updateLod);
 
     const resizeObserver = new ResizeObserver(() => {
         const nextWidth = Math.max(1, mapCanvas.clientWidth);
@@ -415,17 +480,86 @@ function createMap(report, onHover, onEdgeHover = () => {}) {
         renderer.render(scene, camera);
     }
     animate();
+    updateLod();
+
+    function focusOn(x, y, z, distanceScale = 0.55) {
+        const direction = defaultCameraState.position.clone().sub(defaultCameraState.target).normalize();
+        const focus = new THREE.Vector3(x, y, z);
+        const distance = Math.max(90, mapSpan * distanceScale);
+        controls.enableRotate = false;
+        controls.minZoom = defaultCameraState.minZoom;
+        controls.maxZoom = defaultCameraState.maxZoom;
+        controls.target.copy(focus);
+        camera.position.copy(focus.clone().add(direction.multiplyScalar(distance)));
+        camera.updateProjectionMatrix();
+        controls.update();
+        updateLod();
+    }
+
+    function resetView() {
+        controls.enableRotate = defaultCameraState.enableRotate;
+        controls.minZoom = defaultCameraState.minZoom;
+        controls.maxZoom = defaultCameraState.maxZoom;
+        camera.position.copy(defaultCameraState.position);
+        camera.zoom = defaultCameraState.zoom;
+        controls.target.copy(defaultCameraState.target);
+        camera.updateProjectionMatrix();
+        controls.update();
+        clearSelection();
+    }
 
     return {
-        toggleDistrict,
+        toggleDistrict(moduleName) {
+            const district = moduleObjects.get(moduleName);
+            if (!district) return false;
+            district.visible = !district.visible;
+            const opacity = district.visible ? 1 : 0.16;
+            const apply = (object) => {
+                const materials = Array.isArray(object.material) ? object.material : [object.material];
+                materials.forEach((material) => {
+                    material.transparent = true;
+                    material.opacity = object === district.plate ? (district.visible ? 0.16 : 0.05) : opacity;
+                });
+            };
+            apply(district.plate);
+            district.objects.forEach(apply);
+            if (district.label?.material) district.label.material.opacity = district.visible ? 1 : 0.16;
+            return district.visible;
+        },
+        focusFile(filePath) {
+            const file = data.files.find((item) => item.path === filePath || item.id === filePath);
+            if (!file) return;
+            const matching = buildings.find((mesh) => mesh.userData.file.id === file.id);
+            if (matching) {
+                if (selectedBuilding && selectedBuilding !== matching) setBuildingEmphasis(selectedBuilding, false);
+                selectedBuilding = matching;
+                setBuildingEmphasis(matching, true);
+                showConnectionsFor(file);
+            }
+            focusOn(file.x, file.height, file.z, 0.42);
+            renderInspectorForFile(data.report, file.path);
+        },
+        focusModule(moduleName) {
+            const module = data.modules.find((item) => item.id === moduleName || item.name === moduleName);
+            if (!module) return;
+            focusOn(module.x, 20, module.z, 0.7);
+            renderInspectorForModule(data.report, moduleName);
+        },
+        focusFunction(qualifiedName, analysis) {
+            const functionMetric = functionMetricForQualifiedName(analysis, qualifiedName);
+            if (functionMetric?.file) this.focusFile(functionMetric.file);
+            renderInspectorForEntry(analysis, qualifiedName);
+        },
+        resetView,
         dispose() {
             cancelAnimationFrame(frame);
             resizeObserver.disconnect();
+            controls.removeEventListener('change', updateLod);
             renderer.domElement.removeEventListener('pointermove', pointerMove);
             renderer.domElement.removeEventListener('pointerdown', pointerDown);
             controls.dispose();
             root.traverse((object) => {
-                if (!(object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Sprite)) return;
+                if (!(object instanceof THREE.Mesh || object instanceof THREE.Sprite)) return;
                 object.geometry?.dispose();
                 const material = object.material;
                 if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
@@ -435,10 +569,6 @@ function createMap(report, onHover, onEdgeHover = () => {}) {
             renderer.domElement.remove();
         },
     };
-}
-
-function escapeHtml(value) {
-    return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 }
 
 function renderTooltip(file, event) {
@@ -455,138 +585,206 @@ function renderTooltip(file, event) {
 
 function renderEdgeTooltip(edge, event) {
     if (!edge) return;
-    const call = edge.call;
-    const source = call?.from?.split('::').pop() || edge.from.name;
-    const target = call?.to?.split('::').pop() || edge.to.name;
-    mapTooltip.innerHTML = `<strong>${escapeHtml(source)} → ${escapeHtml(target)}</strong><span>${escapeHtml(edge.from.path)} → ${escapeHtml(edge.to.path)}</span><span>${edge.weight} dependency signal${edge.weight === 1 ? '' : 's'}</span>`;
+    mapTooltip.innerHTML = `<strong>${escapeHtml(edge.from?.path || '')} → ${escapeHtml(edge.to?.path || '')}</strong><span>${edge.weight || 0} architecture signal${edge.weight === 1 ? '' : 's'}</span>`;
     const rect = mapCanvas.getBoundingClientRect();
     mapTooltip.style.left = `${event.clientX - rect.left + 14}px`;
     mapTooltip.style.top = `${event.clientY - rect.top + 14}px`;
     mapTooltip.classList.remove('hidden');
 }
 
-function buildUiSummary(report) {
-    const overview = report?.overview || {};
-    const entryPoints = report?.entry_points || [];
-    const hotspots = report?.hotspots || {};
-    const majorModules = report?.major_modules || report?.modules || [];
-    const readingOrder = report?.reading_order || [];
-    return {
-        overview: {
-            languages: overview.languages || [],
-            file_count: overview.file_count || 0,
-            function_count: overview.function_count || 0,
-            module_count: overview.module_count || 0,
-        },
-        entry_points: entryPoints.slice(0, 4).map((entry) => ({
-            qualified_name: entry.qualified_name,
-            file: entry.file,
-            name: entry.name || entry.qualified_name?.split('::').slice(-1)[0],
-            hotspot_score: Number(entry.hotspot_score || 0),
-            structural_hints: entry.structural_hints || [],
-        })),
-        top_hotspots: (hotspots.files || []).slice(0, 4).map((item) => ({
-            file: item.file,
-            hotspot_score: Number(item.hotspot_score || 0),
-            loc: Number(item.loc || 0),
-            evidence: item.evidence || [],
-        })),
-        major_modules: majorModules.slice(0, 4).map((item) => ({
-            module: item.module,
-            description: item.description || 'Core repository group',
-            total_loc: Number(item.total_loc || 0),
-            hotspot_score: Number(item.hotspot_score || 0),
-            file_count: Array.isArray(item.files) ? item.files.length : (item.file_count || 0),
-        })),
-        reading_order: readingOrder.slice(0, 3).map((item) => ({
-            file: item.file,
-            display_name: item.display_name || fileName(item.file),
-            score: Number(item.score || 0),
-            reason: item.reason || [],
-        })),
-    };
+function collectFlowNodes(node, items = []) {
+    if (!node) return items;
+    const name = node.qualified_name || node.node;
+    if (name) items.push(name);
+    (node.children || []).forEach((child) => collectFlowNodes(child, items));
+    return items;
 }
 
-function renderSummary(report) {
-    const data = report?.ui_summary || buildUiSummary(report);
-    const overview = data.overview || {};
-    const entryPoints = data.entry_points || [];
+function fileMetricForPath(report, filePath) {
+    return (report?.file_metrics || []).find((item) => item.file === filePath) || null;
+}
+
+function moduleMetricForName(report, moduleName) {
+    return (report?.modules || []).find((item) => item.module === moduleName) || null;
+}
+
+function functionMetricForQualifiedName(report, qualifiedName) {
+    return (report?.function_metrics || []).find((item) => item.qualified_name === qualifiedName) || null;
+}
+
+function unique(values) {
+    return [...new Set(values.filter(Boolean))];
+}
+
+function listBlock(title, values) {
+    const items = unique(values).slice(0, 8);
+    if (!items.length) return '';
+    return `<div class="inspector-why"><h3>${escapeHtml(title)}</h3><ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>`;
+}
+
+function renderInspectorForFile(report, filePath) {
+    const fileMetric = fileMetricForPath(report, filePath);
+    if (!fileMetric) return;
+    const moduleName = filePath.split('/').slice(0, -1).join('/') || '.';
+    const moduleMetric = moduleMetricForName(report, moduleName);
+    const hotspot = (report.hotspots?.files || []).find((item) => item.file === filePath);
+    const reading = (report.reading_order || []).find((item) => item.file === filePath);
+    const entry = (report.entry_points || []).find((item) => item.file === filePath);
+    const reasons = unique([
+        ...(hotspot?.evidence || []),
+        ...(reading?.evidence || []),
+        ...(entry?.explanation?.basis || []),
+        ...(fileMetric.evidence || []),
+    ]);
+    const role = fileMetric.is_test ? 'test' : entry ? 'likely entry point' : hotspot ? 'hotspot' : 'implementation file';
+    const imports = (report.import_edges || []).filter((edge) => edge.from === filePath).map((edge) => edge.to);
+    const importedBy = (report.import_edges || []).filter((edge) => edge.to === filePath).map((edge) => edge.from);
+    const calls = (report.function_edges || []).filter((edge) => String(edge.from || '').split('::')[0] === filePath).map((edge) => edge.to);
+    const callers = (report.function_edges || []).filter((edge) => String(edge.to || '').split('::')[0] === filePath).map((edge) => edge.from);
+    analysisInspector.classList.remove('hidden');
+    analysisInspector.innerHTML = `
+        <div class="inspector-header">
+            <div>
+                <h3>File</h3>
+                <span class="inspector-title">${escapeHtml(fileName(filePath))}</span>
+            </div>
+        </div>
+        <div class="inspector-metrics">
+            <div class="inspector-metric"><span class="inspector-metric-label">Path</span><span class="inspector-metric-value">${escapeHtml(filePath)}</span></div>
+            <div class="inspector-metric"><span class="inspector-metric-label">LOC</span><span class="inspector-metric-value">${metric(fileMetric.loc || 0)}</span></div>
+            <div class="inspector-metric"><span class="inspector-metric-label">Functions</span><span class="inspector-metric-value">${metric(fileMetric.number_of_defined_functions || 0)}</span></div>
+            <div class="inspector-metric"><span class="inspector-metric-label">Hotspot</span><span class="inspector-metric-value">${Number(fileMetric.hotspot_score || 0).toFixed(2)}</span></div>
+            <div class="inspector-metric"><span class="inspector-metric-label">Fan-in</span><span class="inspector-metric-value">${metric((fileMetric.incoming_call_dependencies || 0) + (fileMetric.incoming_import_dependencies || 0))}</span></div>
+            <div class="inspector-metric"><span class="inspector-metric-label">Fan-out</span><span class="inspector-metric-value">${metric((fileMetric.outgoing_call_dependencies || 0) + (fileMetric.outgoing_import_dependencies || 0))}</span></div>
+            <div class="inspector-metric"><span class="inspector-metric-label">Role</span><span class="inspector-metric-value">${escapeHtml(role)}</span></div>
+            <div class="inspector-metric"><span class="inspector-metric-label">Module</span><span class="inspector-metric-value">${escapeHtml(moduleMetric?.module || moduleName)}</span></div>
+        </div>
+        <div class="inspector-why">
+            <h3>Why it stands out</h3>
+            <ul>${(reasons.length ? reasons : ['No elevated structural score.']).map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>
+        </div>
+        ${listBlock('Imports', imports)}
+        ${listBlock('Imported by', importedBy)}
+        ${listBlock('Calls', calls)}
+        ${listBlock('Called by', callers)}
+    `;
+}
+
+function renderInspectorForEntry(report, entryPoint) {
+    const flow = (report?.flows || []).find((item) => item.entry_point === entryPoint) || null;
+    const functionMetric = functionMetricForQualifiedName(report, entryPoint);
+    const how = (report?.how_it_works || report?.ui_summary?.how_it_works || []).find((item) => item.entry_point === entryPoint);
+    const rootName = entryPoint ? entryPoint.split('::').slice(-1)[0] : 'entry';
+    const chain = flow?.tree ? collectFlowNodes(flow.tree, []) : [];
+    analysisInspector.classList.remove('hidden');
+    analysisInspector.innerHTML = `
+        <div class="inspector-header">
+            <div>
+                <h3>Function</h3>
+                <span class="inspector-title">${escapeHtml(rootName)}</span>
+            </div>
+        </div>
+        <div class="inspector-metrics">
+            <div class="inspector-metric"><span class="inspector-metric-label">File</span><span class="inspector-metric-value">${escapeHtml(functionMetric?.file || '')}</span></div>
+            <div class="inspector-metric"><span class="inspector-metric-label">LOC</span><span class="inspector-metric-value">${metric(functionMetric?.loc || 0)}</span></div>
+            <div class="inspector-metric"><span class="inspector-metric-label">Fan-in</span><span class="inspector-metric-value">${metric(functionMetric?.fan_in || 0)}</span></div>
+            <div class="inspector-metric"><span class="inspector-metric-label">Fan-out</span><span class="inspector-metric-value">${metric(functionMetric?.fan_out || 0)}</span></div>
+        </div>
+        <div class="inspector-flow">
+            <h3>How execution moves</h3>
+            <ul>
+                ${(how?.steps || []).map((step) => `<li><strong>${escapeHtml(String(step.function || '').split('::').slice(-1)[0])}</strong> ${escapeHtml(step.text || '')}</li>`).join('') || chain.map((node) => `<li>${escapeHtml(node.split('::').slice(-1)[0])}</li>`).join('') || '<li>No bounded dependency chain.</li>'}
+            </ul>
+        </div>
+    `;
+}
+
+function renderInspectorForModule(report, moduleName) {
+    const item = moduleMetricForName(report, moduleName);
+    if (!item) return;
+    analysisInspector.classList.remove('hidden');
+    analysisInspector.innerHTML = `
+        <div class="inspector-header">
+            <div>
+                <h3>Module</h3>
+                <span class="inspector-title">${escapeHtml(moduleName)}</span>
+            </div>
+        </div>
+        <div class="inspector-metrics">
+            <div class="inspector-metric"><span class="inspector-metric-label">LOC</span><span class="inspector-metric-value">${metric(item.total_loc || 0)}</span></div>
+            <div class="inspector-metric"><span class="inspector-metric-label">Files</span><span class="inspector-metric-value">${metric((item.files || []).length)}</span></div>
+            <div class="inspector-metric"><span class="inspector-metric-label">Definitions</span><span class="inspector-metric-value">${metric(item.number_of_definitions || 0)}</span></div>
+            <div class="inspector-metric"><span class="inspector-metric-label">Hotspot</span><span class="inspector-metric-value">${Number(item.hotspot_score || 0).toFixed(2)}</span></div>
+        </div>
+        <div class="inspector-why">
+            <h3>Why this matters</h3>
+            <ul>${(item.evidence || [item.description]).filter(Boolean).map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>
+        </div>
+    `;
+}
+
+function bindFocusButtons(root) {
+    root.querySelectorAll('[data-focus-type]').forEach((button) => {
+        button.addEventListener('click', () => {
+            if (!currentAnalysis || !activeMap) return;
+            const type = button.dataset.focusType;
+            const value = button.dataset.focusValue || '';
+            if (type === 'file' || type === 'hotspot' || type === 'reading') activeMap.focusFile(value);
+            if (type === 'module') activeMap.focusModule(value);
+            if (type === 'entry' || type === 'flow') activeMap.focusFunction(value, currentAnalysis);
+        });
+    });
+}
+
+function renderSidebar(report) {
+    const data = report.ui_summary || {};
+    const overview = data.overview || report.overview || {};
+    const entries = data.entry_points || [];
     const hotspots = data.top_hotspots || [];
     const modules = data.major_modules || [];
-    const readingOrder = data.reading_order || [];
-
-    analysisSummary.innerHTML = `
-        <article class="summary-card">
-            <h3>Repository</h3>
-            <strong>${metric(overview.file_count || 0)}</strong>
-            <small>Files</small>
-        </article>
-        <article class="summary-card">
-            <h3>Functions</h3>
-            <strong>${metric(overview.function_count || 0)}</strong>
-            <small>${(overview.languages || []).join(', ') || 'Mixed languages'}</small>
-        </article>
-        <article class="summary-card">
-            <h3>Entry points</h3>
-            <ul>
-                ${(entryPoints.length ? entryPoints : [{ name: 'No clear entry points detected', file: 'n/a' }]).slice(0, 3).map((entry) => `<li>${escapeHtml(entry.name || fileName(entry.file || 'n/a'))}</li>`).join('')}
-            </ul>
-        </article>
-        <article class="summary-card">
-            <h3>Top hotspots</h3>
-            <ul>
-                ${(hotspots.length ? hotspots : [{ file: 'No hotspots', hotspot_score: 0 }]).slice(0, 3).map((item) => `<li>${escapeHtml(fileName(item.file || 'n/a'))}</li>`).join('')}
-            </ul>
-        </article>
-    `;
-
-    const moduleText = modules.length
-        ? modules.map((item) => `<li>${escapeHtml(item.module || 'module')} · ${metric(item.total_loc || 0)} LOC</li>`).join('')
-        : '<li>No major module groups detected.</li>';
-    const readingText = readingOrder.length
-        ? readingOrder.map((item) => `<li>${escapeHtml(item.display_name || fileName(item.file || 'n/a'))}</li>`).join('')
-        : '<li>No recommended reading order.</li>';
-
-    analysisSummary.insertAdjacentHTML('beforeend', `
-        <article class="summary-card">
-            <h3>Major modules</h3>
-            <ul>${moduleText}</ul>
-        </article>
-        <article class="summary-card">
-            <h3>Where to start</h3>
-            <ul>${readingText}</ul>
-        </article>
-    `);
-}
-
-function renderSidebar(data) {
-    const report = data.report;
-    const hotspotCount = report.hotspots?.files?.length || data.files.filter((file) => file.isHotspot).length;
-    const entryCount = data.files.filter((file) => file.entry).length;
-    const topModules = [...data.modules].sort((a, b) => b.files.length - a.files.length);
+    const reading = data.reading_order || [];
+    const flows = data.flows || report.flows || [];
     mapSidebar.innerHTML = `
         <section class="guide-section">
-            <p class="sidebar-title">Reading the map <span>⌄</span></p>
-            <div class="guide-item"><b class="guide-icon height-icon">▂▅▇</b><span><strong>Height</strong><small>Lines of code, on a log scale.</small></span></div>
-            <div class="guide-item"><b class="guide-icon colour-icon">▰</b><span><strong>Colour</strong><small>The top-level directory a file lives in.</small></span></div>
-            <div class="guide-item"><b class="guide-icon plate-icon">▱</b><span><strong>Plate</strong><small>One district, sized to the files it holds.</small></span></div>
-            <div class="guide-item"><b class="guide-icon arc-icon">⌁</b><span><strong>Arcs</strong><small>Dependencies connected to hotspot files.</small></span></div>
+            <p class="sidebar-title">What this repo is</p>
+            <strong>${metric(overview.file_count || 0)} files</strong>
+            <small>${metric(overview.function_count || 0)} functions · ${metric(overview.module_count || 0)} modules · ${(overview.languages || []).join(', ') || 'mixed'}</small>
         </section>
-        <section class="guide-section landmarks">
-            <p class="sidebar-title">Landmarks</p>
-            <div class="landmark-row"><b class="diamond hotspot-diamond"></b><span><strong>Hotspot <em>${hotspotCount}</em></strong><small>Unusually large or complex files.</small></span></div>
-            <div class="landmark-row"><b class="diamond entry-diamond"></b><span><strong>Entry point <em>${entryCount}</em></strong><small>Likely places where execution starts.</small></span></div>
+        <section class="guide-section">
+            <p class="sidebar-title">Where execution starts</p>
+            <div class="brief-list">${entries.length ? entries.map((entry) => `<button type="button" data-focus-type="entry" data-focus-value="${escapeHtml(entry.qualified_name || '')}"><strong>${escapeHtml(entry.name || fileName(entry.file))}</strong><small>${escapeHtml(entry.file || '')}${entry.structural_hints?.length ? ` · ${escapeHtml(entry.structural_hints.join(', '))}` : ''}</small></button>`).join('') : '<small>No likely entry points.</small>'}</div>
         </section>
-        <section class="guide-section districts-section">
-            <p class="sidebar-title">Districts <em>${data.modules.length}</em></p>
-            ${topModules.slice(0, 12).map((module, index) => `<button class="district-row" type="button" data-module="${escapeHtml(module.name)}"><i style="background:#${colorForModule(index).toString(16).padStart(6, '0')}"></i><code>${escapeHtml(module.name)}</code><span>${module.files.length}</span></button>`).join('')}
+        <section class="guide-section">
+            <p class="sidebar-title">What matters</p>
+            <div class="brief-list">${hotspots.length ? hotspots.map((item) => `<button type="button" data-focus-type="hotspot" data-focus-value="${escapeHtml(item.file || '')}"><strong>${escapeHtml(fileName(item.file))}</strong><small>${escapeHtml((item.evidence || []).slice(0, 3).join(' · ') || `hotspot ${Number(item.hotspot_score || 0).toFixed(2)}`)}</small></button>`).join('') : '<small>No hotspot files.</small>'}</div>
+        </section>
+        <section class="guide-section">
+            <p class="sidebar-title">Major parts</p>
+            <div class="brief-list">${modules.length ? modules.map((item) => {
+                const name = !item.module || item.module === '.' ? 'root' : item.module;
+                return `<button type="button" data-focus-type="module" data-focus-value="${escapeHtml(item.module || '.')}"><strong>${escapeHtml(name)}</strong><small>${escapeHtml(item.description || `${metric(item.file_count || 0)} files`)}</small></button>`;
+            }).join('') : '<small>No module groups.</small>'}</div>
+        </section>
+        <section class="guide-section">
+            <p class="sidebar-title">How the main flow works</p>
+            <div class="brief-list">${flows.length ? flows.map((flow) => {
+                const chain = collectFlowNodes(flow.tree, []).slice(0, 6).map((node) => node.split('::').slice(-1)[0]).join(' → ');
+                return `<button type="button" data-focus-type="flow" data-focus-value="${escapeHtml(flow.entry_point || '')}"><strong>${escapeHtml(String(flow.entry_point || '').split('::').slice(-1)[0])}</strong><small>${escapeHtml(chain)}</small></button>`;
+            }).join('') : '<small>No bounded execution flows.</small>'}</div>
+        </section>
+        <section class="guide-section">
+            <p class="sidebar-title">Where to start reading</p>
+            <div class="brief-list">${reading.length ? reading.map((item) => `<button type="button" data-focus-type="reading" data-focus-value="${escapeHtml(item.file || '')}"><strong>${escapeHtml(item.display_name || fileName(item.file))}</strong><small>${escapeHtml((item.evidence || item.reason || []).slice(0, 3).join(' · ') || 'ranked starting file')}</small></button>`).join('') : '<small>No reading order.</small>'}</div>
+        </section>
+        <section class="guide-section">
+            <p class="sidebar-title">Map language</p>
+            <div class="guide-item"><b class="guide-icon height-icon">▂▅▇</b><span><strong>Height</strong><small>Lines of code, log-scaled.</small></span></div>
+            <div class="guide-item"><b class="guide-icon colour-icon">▰</b><span><strong>Colour</strong><small>Module district.</small></span></div>
+            <div class="landmark-row"><b class="diamond hotspot-diamond"></b><span><strong>Orange roof</strong><small>Hotspot landmark.</small></span></div>
+            <div class="landmark-row"><b class="diamond entry-diamond"></b><span><strong>Cyan beacon</strong><small>Likely entry point.</small></span></div>
         </section>
     `;
-}
-
-function renderStats(data) {
-    const totalLoc = data.files.reduce((sum, file) => sum + file.loc, 0);
-    mapStats.innerHTML = `<span>Files <b>${metric(data.files.length)}</b></span><span>Lines <b>${metric(totalLoc)}</b></span><span>Districts <b>${metric(data.modules.length)}</b></span><span>Hotspot links <b>${metric(data.hotspotEdges.length)}</b></span><span>Median file <b>${metric(median(data.files.map((file) => file.loc)))} lines</b></span><span class="language-strip">${(data.overview.languages || []).map((language, index) => `<i style="background:#${colorForModule(index).toString(16).padStart(6, '0')}"></i>${escapeHtml(language)}`).join(' ')}</span>`;
+    bindFocusButtons(mapSidebar);
 }
 
 function median(values) {
@@ -594,6 +792,12 @@ function median(values) {
     const sorted = [...values].sort((a, b) => a - b);
     const middle = Math.floor(sorted.length / 2);
     return sorted.length % 2 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2);
+}
+
+function renderStats(report) {
+    const files = report.map?.buildings || report.file_metrics || [];
+    const totalLoc = files.reduce((sum, file) => sum + (file.loc || 0), 0);
+    mapStats.innerHTML = `<span>Files <b>${metric(files.length)}</b></span><span>Lines <b>${metric(totalLoc)}</b></span><span>Districts <b>${metric((report.map?.districts || report.modules || []).length)}</b></span><span>Median file <b>${metric(median(files.map((file) => file.loc || 0)))} lines</b></span><span class="language-strip">${(report.overview?.languages || []).map((language, index) => `<i style="background:#${colorForModule(index).toString(16).padStart(6, '0')}"></i>${escapeHtml(language)}`).join(' ')}</span>`;
 }
 
 async function analyzeRepository() {
@@ -613,25 +817,17 @@ async function analyzeRepository() {
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Analysis failed.');
-        const overview = result.overview || {};
-        analysisTitle.textContent = url.replace(/^https?:\/\/(www\.)?github\.com\//i, '').replace(/\/$/, '');
+        analysisTitle.textContent = result.overview?.repository || url.replace(/^https?:\/\/(www\.)?github\.com\//i, '').replace(/\/$/, '');
         landing.classList.add('hidden');
         analysisView.classList.remove('hidden');
         document.body.classList.add('analysis-active');
         showMessage('');
-        renderSummary(result);
-        const normalized = normalizeReport(result);
-        renderSidebar(normalized);
-        renderStats(normalized);
+        currentAnalysis = result;
+        renderSidebar(result);
+        renderStats(result);
         activeMap?.dispose();
         activeMap = createMap(result, renderTooltip, renderEdgeTooltip);
-        mapSidebar.querySelectorAll('[data-module]').forEach((row) => {
-            row.addEventListener('click', () => {
-                const visible = activeMap.toggleDistrict(row.dataset.module);
-                row.classList.toggle('district-muted', !visible);
-            });
-        });
-        analysisTitle.title = `${metric(overview.file_count)} files · ${metric(overview.function_count)} functions`;
+        analysisTitle.title = result.version?.sha ? `${result.version.owner}/${result.version.repo}@${result.version.sha.slice(0, 12)}` : '';
     } catch (error) {
         showMessage(error.message || 'Analysis failed.');
     } finally {
@@ -642,6 +838,10 @@ async function analyzeRepository() {
 analyzeButton.addEventListener('click', analyzeRepository);
 repositoryInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') analyzeRepository();
+});
+resetViewButton.addEventListener('click', () => {
+    activeMap?.resetView?.();
+    analysisInspector.classList.add('hidden');
 });
 newAnalysisButton.addEventListener('click', () => {
     activeMap?.dispose();

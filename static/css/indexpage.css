@@ -92,6 +92,20 @@ body {
     background-color: rgba(255, 255, 255, 0.05);
 }
 
+.btn-reset {
+    border: 1px solid rgba(110, 136, 170, 0.45);
+    background: rgba(255, 255, 255, 0.08);
+    color: #e9eef7;
+    border-radius: 6px;
+    padding: 9px 14px;
+    font-size: 0.88rem;
+    cursor: pointer;
+}
+
+.btn-reset:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
 .btn-primary {
     background-color: var(--accent-blue);
     color: var(--bg-main);
@@ -232,8 +246,8 @@ h1 {
 }
 
 body.analysis-active {
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
+    height: 100vh;
 }
 
 body.analysis-active .navbar,
@@ -254,9 +268,11 @@ body.analysis-active .footer {
 
 .analysis-view {
     flex: 1;
-    min-height: 100vh;
-    height: auto;
-    padding: 24px 40px 40px;
+    min-height: 0;
+    height: 100vh;
+    padding: 16px 28px 18px;
+    display: flex;
+    flex-direction: column;
 }
 
 .analysis-header {
@@ -264,7 +280,14 @@ body.analysis-active .footer {
     align-items: center;
     justify-content: space-between;
     gap: 24px;
-    margin-bottom: 18px;
+    margin-bottom: 12px;
+    flex: 0 0 auto;
+}
+
+.analysis-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .analysis-header h1 {
@@ -274,17 +297,17 @@ body.analysis-active .footer {
 
 .analysis-summary {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
     margin: 0 0 18px;
 }
 
 .summary-card {
-    padding: 14px 16px;
+    padding: 12px 14px;
     border: 1px solid #d9e0e8;
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.95);
-    box-shadow: 0 10px 28px rgba(58, 72, 86, 0.08);
+    box-shadow: 0 8px 20px rgba(58, 72, 86, 0.06);
 }
 
 .summary-card h3 {
@@ -325,6 +348,135 @@ body.analysis-active .footer {
     line-height: 1.45;
 }
 
+.summary-button,
+.summary-list-item {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: #eef3fb;
+    color: #203449;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.summary-button:hover,
+.summary-list-item:hover {
+    background: #e4edfb;
+    border-color: #bfd1ef;
+    transform: translateY(-1px);
+}
+
+.summary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 0.75rem;
+}
+
+.summary-button span:last-child {
+    color: #68809a;
+}
+
+.analysis-inspector {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 4;
+    width: min(340px, calc(100% - 28px));
+    max-height: calc(100% - 70px);
+    overflow: auto;
+    margin: 0;
+    padding: 14px 16px 12px;
+    border: 1px solid #d9e0e8;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 16px 36px rgba(58, 72, 86, 0.16);
+    color: #24364a;
+}
+
+.inspector-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.inspector-header h3 {
+    margin: 0;
+    font-size: 0.74rem;
+    color: #718196;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.inspector-title {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #203449;
+    margin-top: 4px;
+}
+
+.inspector-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+    margin: 12px 0;
+}
+
+.inspector-metric {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #f4f7fb;
+    border: 1px solid #e0e7f1;
+}
+
+.inspector-metric-label {
+    display: block;
+    color: #76869a;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.inspector-metric-value {
+    display: block;
+    margin-top: 5px;
+    color: #203449;
+    font-size: 0.96rem;
+    font-weight: 700;
+}
+
+.inspector-why,
+.inspector-flow {
+    margin-top: 12px;
+}
+
+.inspector-why ul,
+.inspector-flow ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    display: grid;
+    gap: 6px;
+    color: #465a73;
+    font-size: 0.75rem;
+}
+
+.inspector-flow button {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: #1a3650;
+    cursor: pointer;
+    text-align: left;
+    font-weight: 600;
+}
+
 .eyebrow {
     color: var(--accent-blue);
     font-size: 0.72rem;
@@ -335,10 +487,11 @@ body.analysis-active .footer {
 
 .analysis-layout {
     display: grid;
-    grid-template-columns: 224px minmax(0, 1fr);
-    gap: 18px;
-    min-height: 650px;
-    height: min(72vh, 820px);
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 14px;
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
 }
 
 .map-sidebar,
@@ -359,6 +512,29 @@ body.analysis-active .footer {
     background: rgba(255, 255, 255, 0.94);
     color: #27384a;
     box-shadow: 0 16px 42px rgba(58, 72, 86, 0.1);
+}
+
+.brief-list {
+    display: grid;
+    gap: 6px;
+}
+
+.brief-list button {
+    width: 100%;
+    padding: 7px 8px;
+    border: 0;
+    border-radius: 8px;
+    background: #eef3fb;
+    color: #203449;
+    text-align: left;
+    cursor: pointer;
+}
+
+.brief-list button small {
+    display: block;
+    margin-top: 2px;
+    color: #6d7f93;
+    font-size: 0.68rem;
 }
 
 .guide-section {
@@ -495,6 +671,11 @@ body.analysis-active .footer {
     font-variant-numeric: tabular-nums;
 }
 
+.map-canvas {
+    width: 100%;
+    height: 100%;
+}
+
 .map-canvas,
 .map-canvas canvas {
     width: 100%;
@@ -591,10 +772,12 @@ body.analysis-active .footer {
 }
 
 .map-stats {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 20px;
     min-height: 34px;
+    margin-top: 12px;
     padding: 8px 12px;
     border: 1px solid #d9dfe5;
     border-radius: 8px;

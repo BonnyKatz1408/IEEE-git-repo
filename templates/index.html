@@ -59,21 +59,25 @@
                 <p class="eyebrow">Repository map</p>
                 <h1 id="analysis-title">Repository</h1>
             </div>
-            <button class="btn-login" id="new-analysis-btn" type="button">New analysis</button>
+            <div class="analysis-actions">
+                <button class="btn-reset" id="reset-view-btn" type="button">Reset View</button>
+                <button class="btn-login" id="new-analysis-btn" type="button">New analysis</button>
+            </div>
         </header>
         <div class="analysis-layout">
-            <aside class="map-sidebar" id="map-sidebar" aria-label="Map guide"></aside>
+            <aside class="map-sidebar" id="map-sidebar" aria-label="Repository briefing"></aside>
             <section class="map-panel" aria-label="Interactive repository map">
                 <div class="map-canvas" id="map-canvas"></div>
                 <div class="map-tooltip hidden" id="map-tooltip"></div>
+                <aside class="analysis-inspector hidden" id="analysis-inspector" aria-live="polite"></aside>
                 <div class="map-legend">
                     <span><i class="legend-swatch legend-normal"></i>File size</span>
-                    <span><i class="legend-swatch legend-hotspot"></i>Hotspot</span>
+                    <span><i class="legend-swatch legend-hotspot"></i>Hotspot roof</span>
                     <span><i class="legend-swatch legend-entry"></i>Entry point</span>
                 </div>
             </section>
         </div>
-        <section class="analysis-summary" id="analysis-summary" aria-live="polite"></section>
+        <section class="analysis-summary hidden" id="analysis-summary" hidden></section>
         <footer class="map-stats" id="map-stats"></footer>
     </main>
 

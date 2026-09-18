@@ -13,30 +13,106 @@ READING_ORDER_WEIGHTS = {
 }
 
 
+def _strip_root_text(value, root):
+    if not isinstance(value, str) or not value:
+        return value
+    text = value.replace('\\', '/')
+    root_s = str(Path(root).resolve()).replace('\\', '/')
+    if root_s in text:
+        text = text.replace(root_s + '/', '').replace(root_s, '').lstrip('/')
+    return text
+
+
 def _relative(path, root):
-    try:
-        return Path(path).resolve().relative_to(Path(root).resolve()).as_posix()
-    except ValueError:
+    if not path:
         return path
+    candidate = _strip_root_text(str(path), root)
+    if candidate.startswith(('http://', 'https://')):
+        return candidate
+    posix = Path(candidate)
+    if not posix.is_absolute():
+        return candidate.lstrip('./')
+    try:
+        return posix.resolve().relative_to(Path(root).resolve()).as_posix()
+    except ValueError:
+        return candidate.lstrip('/')
 
 
-def _module_hint(module):
-    parts = set(module.split("/"))
-    if "api" in parts:
-        return "API and request handling"
-    if "components" in parts:
-        return "frontend components"
-    if "iso" in parts:
-        return "rendering and interaction subsystem"
-    if "agents" in parts:
-        return "analysis agent implementations"
-    if "scripts" in parts:
-        return "repository tooling scripts"
-    if "__tests__" in parts or "tests" in parts or "test" in parts:
-        return "tests and fixtures"
-    if "lib" in parts:
-        return "shared library code"
-    return None
+def _normalise_symbol_name(value, root):
+    if not value:
+        return value
+    if '::' not in value:
+        return _relative(value, root)
+    file_part, _, symbol = value.rpartition('::')
+    return f"{_relative(file_part, root)}::{symbol}"
+
+
+import re
+
+ROLE_TOKEN_TABLE = (
+    (("test", "tests", "__tests__", "spec", "fixture", "fixtures"), "tests and fixtures"),
+    (("ingest", "ingester", "fetch", "clone", "scan", "scanner"), "ingestion"),
+    (("parse", "parser", "extract", "extractor"), "parsing"),
+    (("layout", "place", "simulate"), "layout"),
+    (("annot", "annotate", "annotation", "label", "highlight"), "annotation"),
+    (("render", "draw", "canvas", "scene", "iso", "visual", "skyline", "map"), "visualization / rendering"),
+    (("api", "handler", "handlers", "route", "routes", "controller", "controllers", "endpoint", "request"), "request handling"),
+    (("component", "components", "view", "views", "ui", "frontend", "page", "pages"), "frontend / UI"),
+    (("script", "scripts", "tool", "tools", "cli"), "tooling scripts"),
+    (("type", "types", "model", "models", "schema"), "types / models"),
+    (("server", "backend", "service", "services"), "backend / services"),
+    (("lib", "core", "common", "shared", "util", "utils"), "shared library"),
+)
+
+FUNCTION_ROLE_TABLE = (
+    (("test", "spec", "fixture"), "test helper"),
+    (("ingest", "fetch", "clone", "load", "read"), "ingestion stage"),
+    (("parse", "extract", "scan"), "parsing / extraction stage"),
+    (("layout", "prioritize", "simulate"), "layout construction stage"),
+    (("annot", "annotate", "label", "highlight"), "annotation stage"),
+    (("render", "draw", "paint", "export", "download"), "output / rendering stage"),
+    (("request", "handler", "serve"), "request handler"),
+    (("main", "start", "boot", "init", "run"), "startup / orchestration"),
+    (("cache"), "caching stage"),
+)
+
+
+def _name_tokens(*values):
+    tokens = set()
+    for value in values:
+        text = re.sub(r"([a-z])([A-Z])", r"\1 \2", str(value or "").replace("\\", "/"))
+        text = re.sub(r"[^A-Za-z0-9]+", " ", text)
+        tokens.update(part.lower() for part in text.split() if len(part) > 1)
+    return tokens
+
+
+def _roles_from_tokens(tokens, table=ROLE_TOKEN_TABLE):
+    roles = []
+    for keys, label in table:
+        if tokens & set(keys) and label not in roles:
+            roles.append(label)
+    return roles
+
+
+def _module_hint(module, files=()):
+    tokens = _name_tokens(module, *[Path(file_name).stem for file_name in files])
+    roles = [role for role in _roles_from_tokens(tokens) if role != "tests and fixtures" or _is_test_module(module, files)]
+    if not roles:
+        return None
+    return " / ".join(roles[:3])
+
+
+def _is_test_module(module, files=()):
+    tokens = _name_tokens(module, *files)
+    return bool(tokens & {"test", "tests", "__tests__", "spec", "fixture", "fixtures"})
+
+
+def _function_role(qualified_name, file_name=""):
+    name = str(qualified_name or "").split("::")[-1]
+    roles = _roles_from_tokens(_name_tokens(name, file_name), FUNCTION_ROLE_TABLE)
+    if roles:
+        return roles[0]
+    return "downstream call in the entry-point chain"
 
 
 def _function_name(metric):
@@ -141,8 +217,12 @@ def _enrich_modules(analysis, root):
             }
             for target, values in sorted(dependency_map[raw["module"]].items())
         ]
-        purpose_hint = _module_hint(raw["module"])
+        purpose_hint = _module_hint(raw["module"], raw["files"])
         description = _module_description(raw["module"], raw["files"], functions, purpose_hint)
+        key_files = sorted(
+            metrics,
+            key=lambda metric: (-metric["hotspot_score"], -metric["loc"], metric["file"]),
+        )[:4]
         item.update({
             "total_loc": sum(metric["loc"] for metric in metrics),
             "number_of_definitions": sum(metric["number_of_defined_functions"] for metric in metrics),
@@ -150,7 +230,17 @@ def _enrich_modules(analysis, root):
             "hotspot_score": hotspot,
             "is_test": bool(metrics) and all(metric["is_test"] for metric in metrics),
             "purpose_hint": purpose_hint,
+            "role": purpose_hint,
             "description": description,
+            "key_files": [
+                {
+                    "file": metric["file"],
+                    "name": Path(metric["file"]).name,
+                    "loc": metric["loc"],
+                    "hotspot_score": metric["hotspot_score"],
+                }
+                for metric in key_files
+            ],
             "key_functions": [
                 {
                     "qualified_name": metric["qualified_name"],
@@ -170,6 +260,27 @@ def _enrich_modules(analysis, root):
         })
         modules.append(item)
     return modules
+
+
+def _file_why(item):
+    why = []
+    loc = item.get("loc") or 0
+    definitions = item.get("number_of_defined_functions") or 0
+    incoming = (item.get("incoming_import_dependencies") or 0) + (item.get("incoming_call_dependencies") or 0)
+    internal = item.get("internal_edges") or 0
+    if loc >= 200:
+        why.append("large implementation")
+    elif loc >= 80:
+        why.append("substantial implementation")
+    if definitions >= 10:
+        why.append(f"{definitions} definitions")
+    if incoming >= 2:
+        why.append("reused by other files")
+    if internal >= 8:
+        why.append("internally reused")
+    if (item.get("hotspot_score") or 0) >= 0.5:
+        why.append("high structural score")
+    return why
 
 
 def _hotspots(analysis):
@@ -192,6 +303,14 @@ def _hotspots(analysis):
                 "fan_in": item["fan_in"],
                 "fan_out": item["fan_out"],
                 "evidence": [f"{item['loc']} LOC", f"fan-in {item['fan_in']}", f"fan-out {item['fan_out']}"],
+                "why": _file_why({
+                    "loc": item["loc"],
+                    "incoming_call_dependencies": item["fan_in"],
+                    "incoming_import_dependencies": 0,
+                    "internal_edges": 0,
+                    "number_of_defined_functions": 1,
+                    "hotspot_score": item["hotspot_score"],
+                }),
             }
             for item in function_hotspots
         ],
@@ -212,6 +331,7 @@ def _hotspots(analysis):
                     f"{item.get('incoming_import_dependencies', 0)} incoming imports",
                     f"{item.get('outgoing_import_dependencies', 0)} outgoing imports",
                 ],
+                "why": _file_why(item),
             }
             for item in file_hotspots
         ],
@@ -281,10 +401,12 @@ def _important_functions(analysis):
     }
 
 
-def _reported_entry_points(analysis):
+def _reported_entry_points(analysis, root):
     entries = []
     for entry in analysis["likely_entry_points"]:
         item = dict(entry)
+        item['file'] = _relative(entry.get('file'), root) if 'file' in entry else entry.get('file')
+        item['qualified_name'] = _normalise_symbol_name(entry.get('qualified_name'), root)
         basis = [
             f"fan-in = {entry['fan_in']}",
             f"fan-out = {entry['fan_out']}",
@@ -351,29 +473,103 @@ def _flows(analysis):
     ]
 
 
+def _flow_spine(tree, limit=6):
+    steps = []
+    node = tree
+    seen = set()
+    while node and len(steps) < limit:
+        qualified = node.get("qualified_name") or node.get("node")
+        if not qualified or qualified in seen:
+            break
+        seen.add(qualified)
+        steps.append(node)
+        children = node.get("children") or []
+        node = children[0] if children else None
+    return steps
+
+
+def _step_description(qualified_name, metric, entry=False):
+    file_name = (metric or {}).get("file") or (qualified_name.split("::")[0] if "::" in (qualified_name or "") else "")
+    role = _function_role(qualified_name, file_name)
+    basis = []
+    if entry:
+        basis.append("classified as a likely entry point")
+    if metric:
+        if metric.get("fan_in") == 0:
+            basis.append("zero internal fan-in")
+        if metric.get("fan_out"):
+            basis.append(f"fan-out {metric['fan_out']}")
+        if file_name:
+            basis.append(f"defined in {file_name}")
+    if entry:
+        text = f"{role} based on its name"
+        if metric and metric.get("fan_in") == 0:
+            text += " and zero internal fan-in"
+        text += "."
+    else:
+        text = f"{role} from its name"
+        if file_name:
+            text += f"; defined in {file_name}"
+        if metric and metric.get("fan_out"):
+            text += f"; calls {metric['fan_out']} internal functions"
+        text += "."
+    return {"text": text, "basis": basis, "role": role}
+
+
 def _how_it_works(flows, analysis):
     metrics = {metric["qualified_name"]: metric for metric in analysis["function_metrics"]}
     entries = {entry["qualified_name"]: entry for entry in analysis["likely_entry_points"]}
     explanations = []
     for flow in flows[:MAX_REPORT_ITEMS]:
-        entry_name = flow["entry_point"]
-        entry = entries.get(entry_name, {})
-        steps = [{
-            "function": entry_name,
-            "text": "Likely application entry point based on its name and zero fan-in." if entry else "Flow root from the dependency graph.",
-            "basis": flow["evidence"],
-            "confidence": "heuristic" if entry else "fact",
-        }]
-        for child in flow["tree"].get("children", [])[:MAX_FLOW_BRANCHES]:
-            metric = metrics.get(child["qualified_name"], {})
+        steps = []
+        for index, node in enumerate(_flow_spine(flow.get("tree") or {})):
+            qualified = node.get("qualified_name") or node.get("node")
+            metric = metrics.get(qualified, {})
+            detail = _step_description(qualified, metric, entry=index == 0 and qualified in entries)
             steps.append({
-                "function": child["qualified_name"],
-                "text": f"Direct downstream branch of {entry_name.split('::')[-1]}.",
-                "basis": child["evidence"] + ([f"fan-out = {metric['fan_out']}"] if metric else []),
-                "confidence": "fact",
+                "function": qualified,
+                "file": metric.get("file") or (qualified.split("::")[0] if "::" in qualified else ""),
+                "text": detail["text"],
+                "role": detail["role"],
+                "basis": (node.get("evidence") or []) + detail["basis"],
+                "confidence": "heuristic" if index == 0 else "fact",
             })
-        explanations.append({"entry_point": entry_name, "steps": steps})
+        explanations.append({"entry_point": flow["entry_point"], "steps": steps})
     return explanations
+
+
+def _repository_brief(modules, flows, overview, how_it_works):
+    ranked = sorted(
+        [module for module in modules if not module.get("is_test") and module.get("module") not in {None, ""}],
+        key=lambda item: (-(item.get("total_loc") or 0), item.get("module") or ""),
+    )
+    structure = []
+    seen = set()
+    for module in ranked:
+        role = module.get("role") or module.get("purpose_hint")
+        if not role or role in seen or role == "tests and fixtures":
+            continue
+        if module.get("module") == ".":
+            continue
+        seen.add(role)
+        structure.append({"role": role, "module": module["module"], "total_loc": module.get("total_loc") or 0})
+        if len(structure) >= 5:
+            break
+    main_flow = []
+    if how_it_works:
+        main_flow = how_it_works[0].get("steps") or []
+    elif flows:
+        main_flow = [
+            {"function": node.get("qualified_name") or node.get("node"), "text": "", "role": _function_role(node.get("qualified_name") or node.get("node"))}
+            for node in _flow_spine((flows[0] or {}).get("tree") or {})
+        ]
+    names = [step["function"].split("::")[-1] for step in main_flow if step.get("function")]
+    return {
+        "structure": structure,
+        "main_flow": main_flow,
+        "main_flow_label": " → ".join(names),
+        "languages": overview.get("languages") or [],
+    }
 
 
 def _reading_order(analysis, modules, root):
@@ -576,6 +772,7 @@ def build_ui_summary(report):
             }
             for item in _clip(reading_order)
         ],
+        "how_it_works": report.get("how_it_works", []),
         "important_functions": report.get("important_functions", {}),
     }
 
@@ -588,12 +785,14 @@ def build_report(analysis, source_files, languages, root):
     reading_order = _reading_order(analysis, modules, root)
     important_functions = _important_functions(analysis)
     architectural_notes = _architectural_notes(analysis, modules)
-    entry_points = _reported_entry_points(analysis)
+    entry_points = _reported_entry_points(analysis, root)
+    how_it_works = _how_it_works(flows, analysis)
     overview = {
-        "languages": sorted({languages[Path(file_name).suffix] for file_name in source_files}),
+        "languages": sorted({languages[Path(file_name).suffix] for file_name in source_files if Path(file_name).suffix in languages}),
         "file_count": len(source_files),
         "function_count": len(analysis["functions"]),
         "module_count": len(modules),
+        "repository": Path(root).name,
     }
     result = dict(analysis)
     result.update({
@@ -620,21 +819,75 @@ def build_report(analysis, source_files, languages, root):
         "hotspots": hotspots,
         "flows": flows,
         "execution_flows": flows,
+        "how_it_works": how_it_works,
         "important_functions": important_functions,
         "reading_order": reading_order,
         "architectural_notes": architectural_notes,
         "architecture_notes": architectural_notes,
-        "ui_summary": build_ui_summary({
-            "overview": overview,
-            "entry_points": entry_points,
-            "hotspots": hotspots,
-            "major_modules": major_modules,
-            "flows": flows,
-            "reading_order": reading_order,
-            "important_functions": important_functions,
-        }),
+    })
+    result = normalise_report_paths(result, root)
+    result["ui_summary"] = build_ui_summary({
+        "overview": result["overview"],
+        "entry_points": result["entry_points"],
+        "hotspots": result["hotspots"],
+        "major_modules": result["major_modules"],
+        "flows": result["flows"],
+        "reading_order": result["reading_order"],
+        "how_it_works": result["how_it_works"],
+        "important_functions": result["important_functions"],
     })
     return result
+
+
+PATH_KEYS = {"file", "from", "to", "display_name", "source", "resolved_file", "caller"}
+SYMBOL_KEYS = {"qualified_name", "node", "entry_point", "function"}
+PATH_LIST_KEYS = {"files"}
+SYMBOL_LIST_KEYS = {"defined_functions", "dependents", "dependencies", "candidates"}
+GRAPH_KEYS = {"graph", "reverse_graph", "file_graph"}
+
+
+def _normalise_identity(value, root):
+    if not isinstance(value, str):
+        return value
+    stripped = _strip_root_text(value, root)
+    if "::" in stripped:
+        return _normalise_symbol_name(stripped, root)
+    if "/" in stripped or "\\" in stripped:
+        return _relative(stripped, root)
+    return stripped
+
+
+def normalise_report_paths(obj, root, key=None):
+    if isinstance(obj, dict):
+        if key in GRAPH_KEYS:
+            return {
+                _normalise_identity(item_key, root): normalise_report_paths(item_value, root)
+                for item_key, item_value in obj.items()
+            }
+        cleaned = {}
+        for item_key, value in obj.items():
+            if item_key in PATH_KEYS and isinstance(value, str):
+                cleaned[item_key] = _relative(value, root)
+            elif item_key in SYMBOL_KEYS and isinstance(value, str):
+                cleaned[item_key] = _normalise_symbol_name(_strip_root_text(value, root), root)
+            elif item_key == "name" and isinstance(value, str):
+                cleaned[item_key] = _normalise_identity(value, root)
+            elif item_key in PATH_LIST_KEYS and isinstance(value, list):
+                cleaned[item_key] = [_relative(item, root) if isinstance(item, str) else normalise_report_paths(item, root) for item in value]
+            elif item_key in SYMBOL_LIST_KEYS and isinstance(value, list):
+                cleaned[item_key] = [_normalise_identity(item, root) if isinstance(item, str) else normalise_report_paths(item, root, item_key) for item in value]
+            else:
+                cleaned[item_key] = normalise_report_paths(value, root, item_key)
+        return cleaned
+    if isinstance(obj, list):
+        return [
+            _normalise_identity(item, root) if key == "cycles" and isinstance(item, str)
+            else normalise_report_paths(item, root, key)
+            for item in obj
+        ]
+    if isinstance(obj, str):
+        return _strip_root_text(obj, root)
+    return obj
 
 
 def _print_flow_tree(node, prefix=""):

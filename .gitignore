@@ -5,3 +5,4 @@
 venv/
 firebase-service-account.json
 repos/
+cache/
