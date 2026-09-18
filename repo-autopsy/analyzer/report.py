@@ -508,6 +508,78 @@ def _architectural_notes(analysis, modules):
     }
 
 
+def build_ui_summary(report):
+    overview = report.get("overview", {}) or {}
+    entry_points = report.get("entry_points", []) or []
+    hotspots = report.get("hotspots", {}) or {}
+    major_modules = report.get("major_modules") or report.get("modules", []) or []
+    flows = report.get("flows", []) or []
+    reading_order = report.get("reading_order", []) or []
+
+    def _clip(items, count=4):
+        return list(items)[:count]
+
+    return {
+        "overview": {
+            "repository": overview.get("repository"),
+            "languages": overview.get("languages", []),
+            "file_count": overview.get("file_count", 0),
+            "function_count": overview.get("function_count", 0),
+            "module_count": overview.get("module_count", 0),
+        },
+        "entry_points": [
+            {
+                "qualified_name": item.get("qualified_name"),
+                "file": item.get("file"),
+                "line": item.get("line"),
+                "name": item.get("name"),
+                "hotspot_score": item.get("hotspot_score", 0),
+                "classification": item.get("classification"),
+                "structural_hints": item.get("structural_hints", []),
+            }
+            for item in _clip(entry_points)
+        ],
+        "top_hotspots": [
+            {
+                "file": item.get("file"),
+                "hotspot_score": item.get("hotspot_score", 0),
+                "loc": item.get("loc", 0),
+                "number_of_defined_functions": item.get("number_of_defined_functions", 0),
+                "evidence": item.get("evidence", []),
+            }
+            for item in _clip((hotspots.get("files") or []))
+        ],
+        "major_modules": [
+            {
+                "module": item.get("module"),
+                "total_loc": item.get("total_loc"),
+                "hotspot_score": item.get("hotspot_score", 0),
+                "description": item.get("description"),
+                "file_count": len(item.get("files", [])),
+            }
+            for item in _clip(major_modules)
+        ],
+        "flows": [
+            {
+                "entry_point": flow.get("entry_point"),
+                "tree": flow.get("tree"),
+            }
+            for flow in _clip(flows, 3)
+        ],
+        "reading_order": [
+            {
+                "file": item.get("file"),
+                "display_name": item.get("display_name"),
+                "score": item.get("score", 0),
+                "reason": item.get("reason", []),
+                "evidence": item.get("evidence", []),
+            }
+            for item in _clip(reading_order)
+        ],
+        "important_functions": report.get("important_functions", {}),
+    }
+
+
 def build_report(analysis, source_files, languages, root):
     modules = _enrich_modules(analysis, root)
     major_modules = [module for module in modules if not module["is_test"]]
@@ -552,6 +624,15 @@ def build_report(analysis, source_files, languages, root):
         "reading_order": reading_order,
         "architectural_notes": architectural_notes,
         "architecture_notes": architectural_notes,
+        "ui_summary": build_ui_summary({
+            "overview": overview,
+            "entry_points": entry_points,
+            "hotspots": hotspots,
+            "major_modules": major_modules,
+            "flows": flows,
+            "reading_order": reading_order,
+            "important_functions": important_functions,
+        }),
     })
     return result
 

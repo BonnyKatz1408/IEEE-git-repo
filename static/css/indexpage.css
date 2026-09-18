@@ -232,7 +232,8 @@ h1 {
 }
 
 body.analysis-active {
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 body.analysis-active .navbar,
@@ -253,9 +254,9 @@ body.analysis-active .footer {
 
 .analysis-view {
     flex: 1;
-    min-height: 0;
-    height: 100vh;
-    padding: 24px 40px;
+    min-height: 100vh;
+    height: auto;
+    padding: 24px 40px 40px;
 }
 
 .analysis-header {
@@ -271,6 +272,59 @@ body.analysis-active .footer {
     font-size: clamp(1.45rem, 3vw, 2.1rem);
 }
 
+.analysis-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin: 0 0 18px;
+}
+
+.summary-card {
+    padding: 14px 16px;
+    border: 1px solid #d9e0e8;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 10px 28px rgba(58, 72, 86, 0.08);
+}
+
+.summary-card h3 {
+    margin: 0 0 8px;
+    color: #718196;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.summary-card p,
+.summary-card li,
+.summary-card strong {
+    margin: 0;
+    color: #24364a;
+}
+
+.summary-card strong {
+    display: block;
+    font-size: 1.5rem;
+    letter-spacing: -0.04em;
+}
+
+.summary-card ul {
+    margin: 0;
+    padding-left: 18px;
+    display: grid;
+    gap: 6px;
+    color: #465a73;
+    font-size: 0.75rem;
+}
+
+.summary-card small {
+    display: block;
+    margin-top: 6px;
+    color: #718196;
+    line-height: 1.45;
+}
+
 .eyebrow {
     color: var(--accent-blue);
     font-size: 0.72rem;
@@ -284,7 +338,7 @@ body.analysis-active .footer {
     grid-template-columns: 224px minmax(0, 1fr);
     gap: 18px;
     min-height: 650px;
-    height: calc(100vh - 164px);
+    height: min(72vh, 820px);
 }
 
 .map-sidebar,

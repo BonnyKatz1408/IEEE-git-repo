@@ -12,6 +12,7 @@ const mapCanvas = document.getElementById('map-canvas');
 const mapTooltip = document.getElementById('map-tooltip');
 const mapSidebar = document.getElementById('map-sidebar');
 const mapStats = document.getElementById('map-stats');
+const analysisSummary = document.getElementById('analysis-summary');
 
 let activeMap = null;
 
@@ -464,6 +465,100 @@ function renderEdgeTooltip(edge, event) {
     mapTooltip.classList.remove('hidden');
 }
 
+function buildUiSummary(report) {
+    const overview = report?.overview || {};
+    const entryPoints = report?.entry_points || [];
+    const hotspots = report?.hotspots || {};
+    const majorModules = report?.major_modules || report?.modules || [];
+    const readingOrder = report?.reading_order || [];
+    return {
+        overview: {
+            languages: overview.languages || [],
+            file_count: overview.file_count || 0,
+            function_count: overview.function_count || 0,
+            module_count: overview.module_count || 0,
+        },
+        entry_points: entryPoints.slice(0, 4).map((entry) => ({
+            qualified_name: entry.qualified_name,
+            file: entry.file,
+            name: entry.name || entry.qualified_name?.split('::').slice(-1)[0],
+            hotspot_score: Number(entry.hotspot_score || 0),
+            structural_hints: entry.structural_hints || [],
+        })),
+        top_hotspots: (hotspots.files || []).slice(0, 4).map((item) => ({
+            file: item.file,
+            hotspot_score: Number(item.hotspot_score || 0),
+            loc: Number(item.loc || 0),
+            evidence: item.evidence || [],
+        })),
+        major_modules: majorModules.slice(0, 4).map((item) => ({
+            module: item.module,
+            description: item.description || 'Core repository group',
+            total_loc: Number(item.total_loc || 0),
+            hotspot_score: Number(item.hotspot_score || 0),
+            file_count: Array.isArray(item.files) ? item.files.length : (item.file_count || 0),
+        })),
+        reading_order: readingOrder.slice(0, 3).map((item) => ({
+            file: item.file,
+            display_name: item.display_name || fileName(item.file),
+            score: Number(item.score || 0),
+            reason: item.reason || [],
+        })),
+    };
+}
+
+function renderSummary(report) {
+    const data = report?.ui_summary || buildUiSummary(report);
+    const overview = data.overview || {};
+    const entryPoints = data.entry_points || [];
+    const hotspots = data.top_hotspots || [];
+    const modules = data.major_modules || [];
+    const readingOrder = data.reading_order || [];
+
+    analysisSummary.innerHTML = `
+        <article class="summary-card">
+            <h3>Repository</h3>
+            <strong>${metric(overview.file_count || 0)}</strong>
+            <small>Files</small>
+        </article>
+        <article class="summary-card">
+            <h3>Functions</h3>
+            <strong>${metric(overview.function_count || 0)}</strong>
+            <small>${(overview.languages || []).join(', ') || 'Mixed languages'}</small>
+        </article>
+        <article class="summary-card">
+            <h3>Entry points</h3>
+            <ul>
+                ${(entryPoints.length ? entryPoints : [{ name: 'No clear entry points detected', file: 'n/a' }]).slice(0, 3).map((entry) => `<li>${escapeHtml(entry.name || fileName(entry.file || 'n/a'))}</li>`).join('')}
+            </ul>
+        </article>
+        <article class="summary-card">
+            <h3>Top hotspots</h3>
+            <ul>
+                ${(hotspots.length ? hotspots : [{ file: 'No hotspots', hotspot_score: 0 }]).slice(0, 3).map((item) => `<li>${escapeHtml(fileName(item.file || 'n/a'))}</li>`).join('')}
+            </ul>
+        </article>
+    `;
+
+    const moduleText = modules.length
+        ? modules.map((item) => `<li>${escapeHtml(item.module || 'module')} · ${metric(item.total_loc || 0)} LOC</li>`).join('')
+        : '<li>No major module groups detected.</li>';
+    const readingText = readingOrder.length
+        ? readingOrder.map((item) => `<li>${escapeHtml(item.display_name || fileName(item.file || 'n/a'))}</li>`).join('')
+        : '<li>No recommended reading order.</li>';
+
+    analysisSummary.insertAdjacentHTML('beforeend', `
+        <article class="summary-card">
+            <h3>Major modules</h3>
+            <ul>${moduleText}</ul>
+        </article>
+        <article class="summary-card">
+            <h3>Where to start</h3>
+            <ul>${readingText}</ul>
+        </article>
+    `);
+}
+
 function renderSidebar(data) {
     const report = data.report;
     const hotspotCount = report.hotspots?.files?.length || data.files.filter((file) => file.isHotspot).length;
@@ -524,6 +619,7 @@ async function analyzeRepository() {
         analysisView.classList.remove('hidden');
         document.body.classList.add('analysis-active');
         showMessage('');
+        renderSummary(result);
         const normalized = normalizeReport(result);
         renderSidebar(normalized);
         renderStats(normalized);
