@@ -208,6 +208,8 @@ def logout_route():
 
 @app.post('/api/analyze')
 def analyze_route():
+    if not session.get('user_id'):
+        return jsonify({'error': 'Sign in to analyze repositories.'}), 401
     payload = request.get_json(silent=True) or {}
     repository_url = str(payload.get('url', '')).strip()
     if not repository_url:
@@ -225,6 +227,8 @@ def analyze_route():
 
 @app.post('/api/ask')
 def ask_route():
+    if not session.get('user_id'):
+        return jsonify({'error': 'Sign in to ask questions about repositories.'}), 401
     payload = request.get_json(silent=True) or {}
     repository_url = str(payload.get('url', '')).strip()
     question = str(payload.get('question', '')).strip()

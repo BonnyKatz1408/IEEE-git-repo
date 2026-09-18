@@ -7,12 +7,18 @@ const repositoryInput = document.getElementById('repo-url');
 const landing = document.querySelector('.hero');
 const analysisView = document.getElementById('analysis-view');
 const analysisTitle = document.getElementById('analysis-title');
-const newAnalysisButton = document.getElementById('new-analysis-btn');
 const mapCanvas = document.getElementById('map-canvas');
 const mapTooltip = document.getElementById('map-tooltip');
 const mapSidebar = document.getElementById('map-sidebar');
 const mapStats = document.getElementById('map-stats');
 const analysisInspector = document.getElementById('analysis-inspector');
+const workspaceList = document.getElementById('workspace-list');
+const newWorkspaceButton = document.getElementById('workspace-new-btn');
+const newAnalysisModal = document.getElementById('new-analysis-modal');
+const newAnalysisInput = document.getElementById('new-repo-url');
+const newAnalysisSubmit = document.getElementById('new-analysis-submit');
+const newAnalysisCancel = document.getElementById('new-analysis-cancel');
+const newAnalysisMessage = document.getElementById('new-analysis-message');
 const mapPanel = document.querySelector('.map-panel');
 const resetViewButton = document.getElementById('reset-view-btn');
 const askPanel = document.getElementById('ask-panel');
@@ -32,6 +38,110 @@ let currentAnalysis = null;
 let currentRepoUrl = '';
 let currentFocusContext = {};
 let aiPanelMinimized = false;
+const WORKSPACE_STORAGE_KEY = 'waypoint.workspaces.v1';
+const workspaceReports = new Map();
+let workspaceMetadata = loadWorkspaceMetadata();
+let activeWorkspaceId = localStorage.getItem('waypoint.activeWorkspace') || null;
+
+function loadWorkspaceMetadata() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(WORKSPACE_STORAGE_KEY) || '[]');
+        return Array.isArray(saved) ? saved : [];
+    } catch {
+        return [];
+    }
+}
+
+function persistWorkspaceMetadata() {
+    localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(workspaceMetadata.slice(0, 30)));
+    if (activeWorkspaceId) localStorage.setItem('waypoint.activeWorkspace', activeWorkspaceId);
+    else localStorage.removeItem('waypoint.activeWorkspace');
+}
+
+function workspaceIdFor(url, report = {}) {
+    const version = report.version || {};
+    const owner = version.owner || url.match(/github\.com[/:]([^/]+)/i)?.[1] || 'repository';
+    const repo = version.repo || url.replace(/\.git\/?$/, '').split('/').pop() || 'workspace';
+    const sha = version.sha || 'latest';
+    return `${owner}/${repo}@${sha}`;
+}
+
+function workspaceDisplayName(metadata) {
+    return metadata.display_name || metadata.repo || metadata.repo_url.split('/').pop() || 'Repository';
+}
+
+function renderWorkspaceList() {
+    if (!workspaceList) return;
+    workspaceList.innerHTML = workspaceMetadata.length ? workspaceMetadata.map((workspace) => `
+        <button class="workspace-item ${workspace.id === activeWorkspaceId ? 'active' : ''}" type="button" data-workspace-id="${escapeHtml(workspace.id)}">
+            <strong>${escapeHtml(workspaceDisplayName(workspace))}</strong>
+            <small>github.com/${escapeHtml(workspace.owner || '')}/${escapeHtml(workspace.repo || '')}</small>
+            <span class="workspace-remove" data-remove-workspace="${escapeHtml(workspace.id)}" aria-label="Remove workspace">×</span>
+        </button>
+    `).join('') : '<small class="workspace-empty">No repositories yet.</small>';
+    workspaceList.querySelectorAll('[data-workspace-id]').forEach((item) => {
+        item.addEventListener('click', () => openWorkspace(item.dataset.workspaceId));
+    });
+    workspaceList.querySelectorAll('[data-remove-workspace]').forEach((remove) => {
+        remove.addEventListener('click', (event) => {
+            event.stopPropagation();
+            removeWorkspace(remove.dataset.removeWorkspace);
+        });
+    });
+}
+
+function removeWorkspace(workspaceId) {
+    workspaceMetadata = workspaceMetadata.filter((item) => item.id !== workspaceId);
+    workspaceReports.delete(workspaceId);
+    if (activeWorkspaceId === workspaceId) {
+        activeWorkspaceId = null;
+        persistWorkspaceMetadata();
+        startNewAnalysis();
+        return;
+    }
+    persistWorkspaceMetadata();
+    renderWorkspaceList();
+}
+
+function saveActiveWorkspaceState() {
+    if (!activeWorkspaceId || !activeMap) return;
+    const metadata = workspaceMetadata.find((item) => item.id === activeWorkspaceId);
+    if (!metadata) return;
+    metadata.ui_state = {
+        ...(metadata.ui_state || {}),
+        map: activeMap.getState?.() || {},
+        ai: metadata.ui_state?.ai || {},
+    };
+    metadata.last_opened_at = new Date().toISOString();
+    persistWorkspaceMetadata();
+}
+
+function upsertWorkspace(url, report) {
+    const version = report.version || {};
+    const id = workspaceIdFor(url, report);
+    const existing = workspaceMetadata.find((item) => item.id === id) || {};
+    const metadata = {
+        ...existing,
+        id,
+        repo_url: url,
+        owner: version.owner || existing.owner || '',
+        repo: version.repo || existing.repo || '',
+        branch: version.branch || existing.branch || 'HEAD',
+        commit_sha: version.sha || existing.commit_sha || '',
+        display_name: existing.display_name || version.repo || url.split('/').pop(),
+        analysis_status: 'ready',
+        cache_key: report.cache?.key || `${version.owner}/${version.repo}/${version.sha}`,
+        created_at: existing.created_at || new Date().toISOString(),
+        last_opened_at: new Date().toISOString(),
+        ui_state: existing.ui_state || { map: {}, ai: {} },
+    };
+    workspaceMetadata = [metadata, ...workspaceMetadata.filter((item) => item.id !== id)];
+    workspaceReports.set(id, report);
+    activeWorkspaceId = id;
+    persistWorkspaceMetadata();
+    renderWorkspaceList();
+    return metadata;
+}
 
 function syncAiPanelPosition() {
     if (!mapPanel || !analysisInspector) return;
@@ -62,9 +172,9 @@ function showMessage(message, kind = 'error') {
     formMessage.className = `form-message ${kind}`;
 }
 
-function setLoading(loading) {
-    analyzeButton.disabled = loading;
-    analyzeButton.textContent = loading ? 'Analyzing repository...' : 'Map Repository';
+function setLoading(loading, button = analyzeButton) {
+    button.disabled = loading;
+    button.textContent = loading ? 'Analyzing repository...' : 'Read repository';
 }
 
 function setAskLoading(loading) {
@@ -186,6 +296,14 @@ function showAskResult(answer, sources = [], mode = 'deterministic-rag-fallback'
     if (!askResult) return;
     askResult.classList.remove('hidden');
     const response = typeof answer === 'object' ? answer : { answer, sources, mode, grounded };
+    if (activeWorkspaceId) {
+        const metadata = workspaceMetadata.find((item) => item.id === activeWorkspaceId);
+        if (metadata) {
+            metadata.ui_state = metadata.ui_state || {};
+            metadata.ui_state.ai = { question: repoQuestionInput?.value || '', response };
+            persistWorkspaceMetadata();
+        }
+    }
     const sourceList = response.sources || sources;
     const modeLabel = sourceModeLabel(response.mode || mode, response.grounded ?? grounded, sourceList.length);
     const sourceButtons = sourceList.length ? sourceList.map((source) => {
@@ -775,6 +893,28 @@ function createMap(report, onHover, onEdgeHover = () => {}) {
             if (functionMetric?.file) this.focusFile(functionMetric.file);
             renderInspectorForEntry(analysis, qualifiedName);
         },
+        getState() {
+            return {
+                selectedFile: selectedBuilding?.userData.file.path || null,
+                camera: {
+                    position: camera.position.toArray(),
+                    target: controls.target.toArray(),
+                    zoom: camera.zoom,
+                },
+            };
+        },
+        restoreState(state = {}) {
+            const cameraState = state.camera;
+            if (state.selectedFile) this.focusFile(state.selectedFile);
+            if (cameraState?.position && cameraState?.target) {
+                camera.position.fromArray(cameraState.position);
+                controls.target.fromArray(cameraState.target);
+                camera.zoom = Number(cameraState.zoom) || camera.zoom;
+                camera.updateProjectionMatrix();
+                controls.update();
+                updateLod();
+            }
+        },
         resetView,
         dispose() {
             cancelAnimationFrame(frame);
@@ -1051,15 +1191,78 @@ function renderStats(report) {
     mapStats.innerHTML = `<span>Files <b>${metric(files.length)}</b></span><span>Lines <b>${metric(totalLoc)}</b></span><span>Districts <b>${metric((report.map?.districts || report.modules || []).length)}</b></span><span>Median file <b>${metric(median(files.map((file) => file.loc || 0)))} lines</b></span><span class="language-strip">${(report.overview?.languages || []).map((language, index) => `<i style="background:#${colorForModule(index).toString(16).padStart(6, '0')}"></i>${escapeHtml(language)}`).join(' ')}</span>`;
 }
 
-async function analyzeRepository() {
-    const url = repositoryInput.value.trim();
+function activateWorkspace(metadata, result) {
+    activeWorkspaceId = metadata.id;
+    workspaceReports.set(metadata.id, result);
+    currentAnalysis = result;
+    currentRepoUrl = metadata.repo_url;
+    currentFocusContext = {};
+    analysisTitle.textContent = result.overview?.repository || metadata.repo || metadata.repo_url;
+    analysisTitle.title = result.version?.sha ? `${result.version.owner}/${result.version.repo}@${result.version.sha.slice(0, 12)}` : '';
+    landing.classList.add('hidden');
+    analysisView.classList.remove('hidden');
+    document.body.classList.add('analysis-active');
+    renderSidebar(result);
+    renderStats(result);
+    activeMap?.dispose();
+    activeMap = createMap(result, renderTooltip, renderEdgeTooltip);
+    activeMap.restoreState?.(metadata.ui_state?.map || {});
+    if (repoQuestionInput) repoQuestionInput.value = metadata.ui_state?.ai?.question || '';
+    setAiPanelState(false, false);
+    const savedAnswer = metadata.ui_state?.ai?.response;
+    if (savedAnswer) showAskResult(savedAnswer, savedAnswer.sources || [], savedAnswer.mode, savedAnswer.grounded);
+    persistWorkspaceMetadata();
+    renderWorkspaceList();
+}
+
+async function fetchWorkspaceReport(metadata) {
+    const inMemory = workspaceReports.get(metadata.id);
+    if (inMemory) return inMemory;
+    const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: metadata.repo_url }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Could not restore this workspace.');
+    workspaceReports.set(metadata.id, result);
+    return result;
+}
+
+async function openWorkspace(workspaceId) {
+    if (workspaceId === activeWorkspaceId && activeMap) return;
+    const metadata = workspaceMetadata.find((item) => item.id === workspaceId);
+    if (!metadata) return;
+    saveActiveWorkspaceState();
+    showMessage('Loading workspace...', 'loading');
+    try {
+        const result = await fetchWorkspaceReport(metadata);
+        metadata.last_opened_at = new Date().toISOString();
+        activateWorkspace(metadata, result);
+        showMessage('');
+    } catch (error) {
+        showMessage(`${error.message} The workspace is still saved; try opening it again.`, 'error');
+    }
+}
+
+function startNewAnalysis() {
+    saveActiveWorkspaceState();
+    newAnalysisMessage.textContent = '';
+    newAnalysisInput.value = '';
+    newAnalysisModal.classList.remove('hidden');
+    newAnalysisInput.focus();
+}
+
+async function analyzeRepository(input = repositoryInput, button = analyzeButton, messageElement = formMessage) {
+    const url = input.value.trim();
     if (!url) {
-        showMessage('Paste a GitHub repository URL first.');
-        repositoryInput.focus();
+        messageElement.textContent = 'Paste a GitHub repository URL first.';
+        input.focus();
         return;
     }
-    setLoading(true);
-    showMessage('The analyzer is scanning, parsing, and weighting the repository...', 'loading');
+    setLoading(true, button);
+    messageElement.textContent = 'The analyzer is scanning, parsing, and weighting the repository...';
+    messageElement.className = messageElement === formMessage ? 'form-message loading' : 'new-analysis-message';
     try {
         const response = await fetch('/api/analyze', {
             method: 'POST',
@@ -1067,29 +1270,24 @@ async function analyzeRepository() {
             body: JSON.stringify({ url }),
         });
         const result = await response.json();
+        if (response.status === 401) {
+            window.location.href = '/login';
+            return;
+        }
         if (!response.ok) throw new Error(result.error || 'Analysis failed.');
-        analysisTitle.textContent = result.overview?.repository || url.replace(/^https?:\/\/(www\.)?github\.com\//i, '').replace(/\/$/, '');
-        landing.classList.add('hidden');
-        analysisView.classList.remove('hidden');
-        document.body.classList.add('analysis-active');
-        if (askPanel) askPanel.classList.remove('hidden');
-        showMessage('');
-        currentAnalysis = result;
-        currentRepoUrl = url;
-        renderSidebar(result);
-        renderStats(result);
-        activeMap?.dispose();
-        activeMap = createMap(result, renderTooltip, renderEdgeTooltip);
-        analysisTitle.title = result.version?.sha ? `${result.version.owner}/${result.version.repo}@${result.version.sha.slice(0, 12)}` : '';
-        if (repoQuestionInput) repoQuestionInput.value = 'Explain the architecture of this repository.';
+        messageElement.textContent = '';
+        if (messageElement === newAnalysisMessage) newAnalysisModal.classList.add('hidden');
+        const metadata = upsertWorkspace(url, result);
+        activateWorkspace(metadata, result);
     } catch (error) {
-        showMessage(error.message || 'Analysis failed.');
+        messageElement.textContent = error.message || 'Analysis failed.';
     } finally {
-        setLoading(false);
+        setLoading(false, button);
     }
 }
 
-analyzeButton.addEventListener('click', analyzeRepository);
+renderWorkspaceList();
+analyzeButton.addEventListener('click', () => analyzeRepository());
 askButton.addEventListener('click', () => askRepository());
 askReopen?.addEventListener('click', () => setAiPanelState(true, aiPanelMinimized));
 askMinimize?.addEventListener('click', () => setAiPanelState(false, true));
@@ -1107,12 +1305,18 @@ resetViewButton.addEventListener('click', () => {
     activeMap?.resetView?.();
     analysisInspector.classList.add('hidden');
 });
-newAnalysisButton.addEventListener('click', () => {
-    activeMap?.dispose();
-    activeMap = null;
-    analysisView.classList.add('hidden');
-    landing.classList.remove('hidden');
-    document.body.classList.remove('analysis-active');
-    setAiPanelState(false, false);
-    repositoryInput.focus();
+newWorkspaceButton?.addEventListener('click', startNewAnalysis);
+newAnalysisSubmit?.addEventListener('click', () => analyzeRepository(newAnalysisInput, newAnalysisSubmit, newAnalysisMessage));
+newAnalysisCancel?.addEventListener('click', () => newAnalysisModal.classList.add('hidden'));
+newAnalysisInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') analyzeRepository(newAnalysisInput, newAnalysisSubmit, newAnalysisMessage);
+    if (event.key === 'Escape') newAnalysisModal.classList.add('hidden');
 });
+newAnalysisModal?.addEventListener('click', (event) => {
+    if (event.target === newAnalysisModal) newAnalysisModal.classList.add('hidden');
+});
+window.addEventListener('pagehide', saveActiveWorkspaceState);
+
+if (activeWorkspaceId && workspaceMetadata.some((item) => item.id === activeWorkspaceId)) {
+    openWorkspace(activeWorkspaceId);
+}
