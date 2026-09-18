@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - WAYPOINT</title>
+    <link rel="stylesheet" href="../static/css/indexpage.css">
+    <link rel="stylesheet" href="../static/css/auth.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+</head>
+<body class="profile-page">
+    <nav class="navbar">
+        <a href="/" class="auth-brand">
+            <span class="auth-brand-mark">W</span>
+            <span>WAYPOINT</span>
+        </a>
+        <div class="nav-actions">
+            <a href="/" class="btn-login">Repository map</a>
+            <form action="/logout" method="post"><button type="submit" class="btn-primary">Sign out</button></form>
+        </div>
+    </nav>
+
+    <main class="profile-main">
+        <div class="profile-heading">
+            <p class="hero-kicker">Your waypoint</p>
+            <h1>Profile details</h1>
+            <p>Keep the details you want attached to your repository work.</p>
+        </div>
+        <form class="profile-card" method="post">
+            {% set values = profile_form or current_user %}
+            {% if profile_error %}<p class="auth-error">{{ profile_error }}</p>{% endif %}
+            {% if profile_saved %}<p class="auth-success">Profile saved.</p>{% endif %}
+            <label for="full_name">Full name</label>
+            <input id="full_name" name="full_name" value="{{ values.full_name or '' }}" required>
+            <label for="email">Email address</label>
+            <input id="email" name="email" type="email" value="{{ values.email or '' }}" required>
+            <label for="location">Location <span>(optional)</span></label>
+            <input id="location" name="location" value="{{ values.location or '' }}" placeholder="Where you work from">
+            <label for="github_username">GitHub username <span>(optional)</span></label>
+            <input id="github_username" name="github_username" value="{{ values.github_username or '' }}" placeholder="your-handle">
+            <label for="bio">Short note <span>(optional)</span></label>
+            <textarea id="bio" name="bio" rows="4" placeholder="What are you exploring?">{{ values.bio or '' }}</textarea>
+            <button class="btn-primary profile-save" type="submit">Save profile</button>
+        </form>
+    </main>
+</body>
+</html>

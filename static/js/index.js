@@ -13,13 +13,49 @@ const mapTooltip = document.getElementById('map-tooltip');
 const mapSidebar = document.getElementById('map-sidebar');
 const mapStats = document.getElementById('map-stats');
 const analysisInspector = document.getElementById('analysis-inspector');
+const mapPanel = document.querySelector('.map-panel');
 const resetViewButton = document.getElementById('reset-view-btn');
+const askPanel = document.getElementById('ask-panel');
+const askButton = document.getElementById('ask-btn');
+const repoQuestionInput = document.getElementById('repo-question');
+const askResult = document.getElementById('ask-result');
+const askChips = document.querySelectorAll('[data-question]');
+const askReopen = document.getElementById('ask-reopen');
+const askMinimize = document.getElementById('ask-minimize');
+const askClose = document.getElementById('ask-close');
 
 const HOTSPOT_ROOF = 0xf28a2d;
 const HOTSPOT_EMPHASIS = 0xff5a36;
 
 let activeMap = null;
 let currentAnalysis = null;
+let currentRepoUrl = '';
+let currentFocusContext = {};
+let aiPanelMinimized = false;
+
+function syncAiPanelPosition() {
+    if (!mapPanel || !analysisInspector) return;
+    if (analysisInspector.classList.contains('hidden')) {
+        mapPanel.style.setProperty('--ask-right-offset', '16px');
+        return;
+    }
+    const mapBounds = mapPanel.getBoundingClientRect();
+    const inspectorBounds = analysisInspector.getBoundingClientRect();
+    const inspectorGap = 20;
+    const rightOffset = Math.max(16, mapBounds.right - inspectorBounds.left + inspectorGap);
+    mapPanel.style.setProperty('--ask-right-offset', `${rightOffset}px`);
+}
+
+const inspectorObserver = new MutationObserver(syncAiPanelPosition);
+inspectorObserver.observe(analysisInspector, { attributes: true, attributeFilter: ['class'], childList: true });
+window.addEventListener('resize', syncAiPanelPosition);
+
+function setAiPanelState(open, minimized = false) {
+    aiPanelMinimized = minimized;
+    askPanel?.classList.toggle('hidden', !open);
+    askReopen?.classList.toggle('hidden', open);
+    syncAiPanelPosition();
+}
 
 function showMessage(message, kind = 'error') {
     formMessage.textContent = message;
@@ -29,6 +65,193 @@ function showMessage(message, kind = 'error') {
 function setLoading(loading) {
     analyzeButton.disabled = loading;
     analyzeButton.textContent = loading ? 'Analyzing repository...' : 'Map Repository';
+}
+
+function setAskLoading(loading) {
+    askButton.disabled = loading;
+    askButton.textContent = loading ? 'Asking...' : 'Ask';
+}
+
+function parseCitation(reference) {
+    const match = String(reference || '').match(/^(.+?):(\d+)(?:-(\d+))?$/);
+    if (!match) return { file: String(reference || ''), line: null };
+    return { file: match[1], line: Number(match[2]) };
+}
+
+function sourceModeLabel(mode, grounded, sourceCount) {
+    if (!grounded || !sourceCount) return 'Deterministic analysis · insufficient retrieved context';
+    if (mode === 'deterministic-analysis') return 'Deterministic analysis';
+    if (mode === 'gemini-rag') return 'Gemini explanation · grounded by retrieved source';
+    return 'Deterministic analysis + retrieved source';
+}
+
+function decodeAnswerText(value) {
+    const decoder = document.createElement('textarea');
+    decoder.innerHTML = String(value || '');
+    return decoder.value
+        .replace(/\\([\\`*_[\]{}()#+.!>-])/g, '$1')
+        .replace(/\\n/g, '\n');
+}
+
+function renderInlineMarkdown(value) {
+    const code = [];
+    const withPlaceholders = decodeAnswerText(value).replace(/`([^`\n]+)`/g, (_, content) => {
+        code.push(`<code>${escapeHtml(content.trim())}</code>`);
+        return `\u0000${code.length - 1}\u0000`;
+    });
+    let html = escapeHtml(withPlaceholders)
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/__(.+?)__/g, '<strong>$1</strong>')
+        .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '<em>$1</em>')
+        .replace(/(?<!_)_([^_\n]+)_(?!_)/g, '<em>$1</em>');
+    html = html.replace(/\u0000(\d+)\u0000/g, (_, index) => code[Number(index)] || '');
+    return html;
+}
+
+function renderMarkdownAnswer(value) {
+    const lines = decodeAnswerText(value).split(/\r?\n/);
+    const output = [];
+    let paragraph = [];
+    let listType = null;
+
+    const closeList = () => {
+        if (listType) output.push(`</${listType}>`);
+        listType = null;
+    };
+    const flushParagraph = () => {
+        if (paragraph.length) {
+            output.push(`<p>${paragraph.map(renderInlineMarkdown).join('<br>')}</p>`);
+            paragraph = [];
+        }
+    };
+
+    lines.forEach((line) => {
+        const heading = line.match(/^\s*(#{1,4})\s+(.+?)\s*$/);
+        const ordered = line.match(/^\s*\d+[.)]\s+(.+?)\s*$/);
+        const unordered = line.match(/^\s*[-*+]\s+(.+?)\s*$/);
+        if (heading) {
+            flushParagraph();
+            closeList();
+            const level = Math.min(heading[1].length + 2, 6);
+            output.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+        } else if (ordered || unordered) {
+            flushParagraph();
+            const nextType = ordered ? 'ol' : 'ul';
+            if (listType !== nextType) {
+                closeList();
+                output.push(`<${nextType}>`);
+                listType = nextType;
+            }
+            output.push(`<li>${renderInlineMarkdown((ordered || unordered)[1])}</li>`);
+        } else if (!line.trim()) {
+            flushParagraph();
+            closeList();
+        } else {
+            closeList();
+            paragraph.push(line.trim());
+        }
+    });
+    flushParagraph();
+    closeList();
+    return output.join('');
+}
+
+function renderDeterministicAnswer(response) {
+    const sections = response.sections || [];
+    if (!sections.length) return `<p class="ask-answer-copy">${escapeHtml(response.answer || 'No answer available.')}</p>`;
+    return sections.map((section) => `
+        <section class="answer-section">
+            <h4>${escapeHtml(section.title || 'Details')}</h4>
+            <div class="answer-items">
+                ${(section.items || []).map((item, index) => {
+                    const path = item.path || '';
+                    const line = item.line ? Number(item.line) : null;
+                    const endLine = item.end_line ? Number(item.end_line) : line;
+                    const reference = path && line ? `${path}:${line}${endLine && endLine !== line ? `-${endLine}` : ''}` : path;
+                    const label = item.label || path || 'Unspecified';
+                    const metadata = item.meta || item.reason || '';
+                    const focus = path && response.mode === 'deterministic-analysis'
+                        ? `<button type="button" class="answer-item-link" data-citation-file="${escapeHtml(path)}" data-citation-line="${line || ''}">${escapeHtml(label)}</button>`
+                        : `<span class="answer-item-label">${escapeHtml(label)}</span>`;
+                    return `<div class="answer-item"><span class="answer-index">${String(index + 1).padStart(2, '0')}</span><div>${focus}${reference && reference !== label ? `<span class="answer-item-path">${escapeHtml(reference)}</span>` : ''}${metadata ? `<span class="answer-item-meta">${escapeHtml(metadata)}</span>` : ''}</div></div>`;
+                }).join('') || '<div class="answer-empty">No deterministic items found.</div>'}
+            </div>
+        </section>
+    `).join('');
+}
+
+function showAskResult(answer, sources = [], mode = 'deterministic-rag-fallback', grounded = true) {
+    if (!askPanel) return;
+    setAiPanelState(true, false);
+    if (!askResult) return;
+    askResult.classList.remove('hidden');
+    const response = typeof answer === 'object' ? answer : { answer, sources, mode, grounded };
+    const sourceList = response.sources || sources;
+    const modeLabel = sourceModeLabel(response.mode || mode, response.grounded ?? grounded, sourceList.length);
+    const sourceButtons = sourceList.length ? sourceList.map((source) => {
+        const parsed = parseCitation(source);
+        return `<button type="button" class="citation-button" data-citation-file="${escapeHtml(parsed.file)}" data-citation-line="${parsed.line ?? ''}">${escapeHtml(source)}</button>`;
+    }).join('') : '';
+    askResult.innerHTML = `
+        <h3>Grounded answer</h3>
+        <span class="ask-source-mode ${response.mode === 'gemini-rag' ? 'retrieved' : ''}">${escapeHtml(modeLabel)}</span>
+        ${response.mode === 'deterministic-analysis' ? renderDeterministicAnswer(response) : `<div class="ask-markdown">${renderMarkdownAnswer(response.answer || 'No answer available.')}</div>`}
+        ${sourceButtons ? `<div class="answer-section citations-section"><h4>Sources</h4><div class="ask-citations">${sourceButtons}</div></div>` : '<p class="ask-empty">No repo-relative source citations were returned for this question.</p>'}
+    `;
+    askResult.querySelectorAll('[data-citation-file]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const filePath = button.dataset.citationFile;
+            const line = Number(button.dataset.citationLine || 0);
+            if (!filePath || !currentAnalysis) return;
+            const mapFile = currentAnalysis.map?.buildings?.find((file) => file.path === filePath || file.id === filePath);
+            if (!mapFile) {
+                showMessage(`This citation is not represented as a map building: ${filePath}.`, 'loading');
+                return;
+            }
+            if (activeMap?.focusFile) activeMap.focusFile(filePath);
+            renderInspectorForFile(currentAnalysis, filePath);
+            if (line && currentAnalysis) {
+                const fileMetric = fileMetricForPath(currentAnalysis, filePath);
+                if (fileMetric) {
+                    const pathValue = [...analysisInspector.querySelectorAll('.inspector-metric-value')].find((item) => item.textContent.includes(filePath));
+                    if (pathValue) pathValue.title = `Line ${line}`;
+                }
+            }
+        });
+    });
+}
+
+async function askRepository(questionOverride = null, context = {}) {
+    const repoUrl = currentRepoUrl || repositoryInput.value.trim();
+    const question = (questionOverride ?? repoQuestionInput.value).trim();
+    const usesSelectedFile = !Object.keys(context).length && /this file|depends on this|calls this|call this|what does this depend on/i.test(question);
+    const requestContext = usesSelectedFile ? currentFocusContext : context;
+    if (!repoUrl) {
+        showMessage('Map a repository before asking a question.');
+        return;
+    }
+    if (!question) {
+        showMessage('Please ask a question about the repository.');
+        return;
+    }
+    setAskLoading(true);
+    try {
+        const response = await fetch('/api/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: repoUrl, question, context: requestContext }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'The repository Q&A request failed.');
+        setAiPanelState(false, false);
+        if (repoQuestionInput) repoQuestionInput.value = question;
+        showAskResult(result, result.sources || [], result.mode, result.grounded);
+    } catch (error) {
+        if (askPanel) askPanel.classList.remove('hidden');
+        showAskResult({ answer: error.message || 'The repository Q&A request failed.', sources: [], mode: 'unavailable', grounded: false });
+    } finally {
+        setAskLoading(false);
+    }
 }
 
 function fileName(path) {
@@ -124,6 +347,7 @@ function mapData(report) {
         moduleEdges: layout.module_edges || [],
         districtEdges: layout.district_edges || [],
         importantFiles: new Set(layout.important_files || []),
+        labelImportantFiles: new Set((layout.important_files || []).slice(0, 12)),
         bounds: layout.bounds || { min_x: -80, max_x: 80, min_z: -80, max_z: 80, max_y: 40 },
     };
 }
@@ -257,12 +481,13 @@ function createMap(report, onHover, onEdgeHover = () => {}) {
             root.add(beacon);
             moduleObjects.get(file.module)?.objects.push(beacon);
         }
-        if (file.isHotspot || file.entry) {
-            const label = makeLabel(file.name, file.isHotspot ? '#b45309' : '#0f766e');
+        if (file.isHotspot || file.entry || data.labelImportantFiles.has(file.id)) {
+            const label = makeLabel(file.name, file.isHotspot ? '#b45309' : file.entry ? '#0f766e' : '#31526d');
             if (label) {
                 label.position.set(file.x, file.height + 15, file.z);
                 label.scale.multiplyScalar(1.2);
                 label.userData.fileId = file.id;
+                label.userData.important = true;
                 root.add(label);
                 fileLabels.push(label);
             }
@@ -374,7 +599,7 @@ function createMap(report, onHover, onEdgeHover = () => {}) {
         const level = lodLevel();
         const target = controls.target;
         districtLabels.forEach((label, index) => {
-            label.visible = level === 'districts' && index < 24;
+            label.visible = index < 24;
         });
         moduleLabels.forEach((label, index) => {
             label.visible = (level === 'modules' || level === 'important') && index < 36;
@@ -390,8 +615,8 @@ function createMap(report, onHover, onEdgeHover = () => {}) {
             else if (level === 'important') building.visible = important;
             else building.visible = important || near;
         });
-        fileLabels.forEach((label, index) => {
-            label.visible = (level === 'important' || level === 'detail') && index < 18;
+        fileLabels.forEach((label) => {
+            label.visible = level === 'important' || level === 'detail';
         });
         districtArcs.forEach((arc) => { arc.visible = level === 'districts'; });
         moduleArcs.forEach((arc) => { arc.visible = level === 'modules' || level === 'important'; });
@@ -641,6 +866,7 @@ function renderInspectorForFile(report, filePath) {
     const importedBy = (report.import_edges || []).filter((edge) => edge.to === filePath).map((edge) => edge.from);
     const calls = (report.function_edges || []).filter((edge) => String(edge.from || '').split('::')[0] === filePath).map((edge) => edge.to);
     const callers = (report.function_edges || []).filter((edge) => String(edge.to || '').split('::')[0] === filePath).map((edge) => edge.from);
+    currentFocusContext = { type: 'file', file: filePath, analysis: { role, loc: fileMetric.loc || 0, hotspot_score: fileMetric.hotspot_score || 0 } };
     analysisInspector.classList.remove('hidden');
     analysisInspector.innerHTML = `
         <div class="inspector-header">
@@ -663,11 +889,23 @@ function renderInspectorForFile(report, filePath) {
             <h3>Why it stands out</h3>
             <ul>${(reasons.length ? reasons : ['No elevated structural score.']).map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>
         </div>
+        <button type="button" class="inspector-action" data-explain-question="${escapeHtml(`Explain this file: ${filePath}`)}" data-explain-context="file">Explain this file</button>
         ${listBlock('Imports', imports)}
         ${listBlock('Imported by', importedBy)}
         ${listBlock('Calls', calls)}
         ${listBlock('Called by', callers)}
     `;
+
+    const explainButton = analysisInspector.querySelector('[data-explain-question]');
+    if (explainButton) {
+        explainButton.addEventListener('click', () => {
+            askRepository(explainButton.dataset.explainQuestion, {
+                type: 'file',
+                file: filePath,
+                analysis: { role, hotspot: fileMetric.hotspot_score || 0, loc: fileMetric.loc || 0 },
+            });
+        });
+    }
 }
 
 function renderInspectorForEntry(report, entryPoint) {
@@ -696,7 +934,20 @@ function renderInspectorForEntry(report, entryPoint) {
                 ${(how?.steps || []).map((step) => `<li><strong>${escapeHtml(String(step.function || '').split('::').slice(-1)[0])}</strong> ${escapeHtml(step.text || '')}</li>`).join('') || chain.map((node) => `<li>${escapeHtml(node.split('::').slice(-1)[0])}</li>`).join('') || '<li>No bounded dependency chain.</li>'}
             </ul>
         </div>
+        <button type="button" class="inspector-action" data-explain-question="${escapeHtml(`Explain this function: ${entryPoint}`)}" data-explain-context="function">Explain this function</button>
     `;
+
+    const explainButton = analysisInspector.querySelector('[data-explain-question]');
+    if (explainButton) {
+        explainButton.addEventListener('click', () => {
+            askRepository(explainButton.dataset.explainQuestion, {
+                type: 'function',
+                qualified_name: entryPoint,
+                file: functionMetric?.file || '',
+                analysis: { fan_in: functionMetric?.fan_in || 0, fan_out: functionMetric?.fan_out || 0 },
+            });
+        });
+    }
 }
 
 function renderInspectorForModule(report, moduleName) {
@@ -821,13 +1072,16 @@ async function analyzeRepository() {
         landing.classList.add('hidden');
         analysisView.classList.remove('hidden');
         document.body.classList.add('analysis-active');
+        if (askPanel) askPanel.classList.remove('hidden');
         showMessage('');
         currentAnalysis = result;
+        currentRepoUrl = url;
         renderSidebar(result);
         renderStats(result);
         activeMap?.dispose();
         activeMap = createMap(result, renderTooltip, renderEdgeTooltip);
         analysisTitle.title = result.version?.sha ? `${result.version.owner}/${result.version.repo}@${result.version.sha.slice(0, 12)}` : '';
+        if (repoQuestionInput) repoQuestionInput.value = 'Explain the architecture of this repository.';
     } catch (error) {
         showMessage(error.message || 'Analysis failed.');
     } finally {
@@ -836,6 +1090,16 @@ async function analyzeRepository() {
 }
 
 analyzeButton.addEventListener('click', analyzeRepository);
+askButton.addEventListener('click', () => askRepository());
+askReopen?.addEventListener('click', () => setAiPanelState(true, aiPanelMinimized));
+askMinimize?.addEventListener('click', () => setAiPanelState(false, true));
+askClose?.addEventListener('click', () => setAiPanelState(false, false));
+askChips.forEach((chip) => {
+    chip.addEventListener('click', () => askRepository(chip.dataset.question));
+});
+repoQuestionInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') askRepository();
+});
 repositoryInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') analyzeRepository();
 });
@@ -849,5 +1113,6 @@ newAnalysisButton.addEventListener('click', () => {
     analysisView.classList.add('hidden');
     landing.classList.remove('hidden');
     document.body.classList.remove('analysis-active');
+    setAiPanelState(false, false);
     repositoryInput.focus();
 });

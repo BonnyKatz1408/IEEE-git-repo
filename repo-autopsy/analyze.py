@@ -10,6 +10,7 @@ from analyzer.imports import analyze_imports
 from analyzer.architecture import enrich_architecture
 from analyzer.report import build_report, print_report
 from analyzer.map_layout import build_map_layout
+from analyzer.rag import RAG_INDEX_VERSION, build_rag_index
 from analyzer.cache import cache_dir, load_cached_report, save_cached_report, trim_client_payload
 from analyzer.extractors.java import extract as extract_java
 from analyzer.extractors.cpp import extract as extract_cpp
@@ -119,6 +120,12 @@ def analyze(url):
     if cached:
         cached.setdefault("overview", {})["repository"] = f"{owner}/{repo_name}"
         cached["version"] = {"owner": owner, "repo": repo_name, "sha": sha}
+        rag_cache = cached.get("rag") or {}
+        if rag_cache.get("version") != RAG_INDEX_VERSION or not rag_cache.get("chunks"):
+            repo_path = project_root / "repos" / repo_name
+            checkout_commit(repo_path, url, sha)
+            cached["rag"] = build_rag_index(cached, repo_path)
+            save_cached_report(cache_dir(project_root, owner, repo_name, sha), cached)
         print(f"cache hit for {owner}/{repo_name}@{sha[:12]}")
         cached["cache"] = {"hit": True, "key": f"{owner}/{repo_name}/{sha}"}
         return trim_client_payload(cached)
@@ -159,6 +166,7 @@ def analyze(url):
     report["overview"]["repository"] = f"{owner}/{repo_name}"
     report["version"] = {"owner": owner, "repo": repo_name, "sha": sha}
     report["map"] = build_map_layout(report)
+    report["rag"] = build_rag_index(report, repo_path)
     print("\nDETERMINISTIC ANALYSIS")
     print_report(report, repo_path)
     report["llm_explanation"] = {
@@ -167,6 +175,7 @@ def analyze(url):
         "error": "Gemini is disabled while the deterministic map is being developed.",
     }
     payload = trim_client_payload(report)
+    payload["rag"] = report["rag"]
     save_cached_report(cache_dir(project_root, owner, repo_name, sha), payload)
     payload["cache"] = {"hit": False, "key": f"{owner}/{repo_name}/{sha}"}
     return payload

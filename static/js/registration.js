@@ -80,7 +80,7 @@ function validateField(fieldId) {
 }
 
 // Handle Step 1 Submit
-function handleStep1Submit(e) {
+async function handleStep1Submit(e) {
     e.preventDefault();
 
     const isNameValid = validateField('fullName');
@@ -94,24 +94,34 @@ function handleStep1Submit(e) {
         btn.disabled = true;
         btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-xs"></i> <span>Sending Code...</span>`;
 
-        setTimeout(() => {
+        try {
+            const response = await fetch('/api/signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    full_name: document.getElementById('fullName').value.trim(),
+                    email: document.getElementById('email').value.trim(),
+                    password: document.getElementById('password').value,
+                }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Unable to create account.');
             btn.disabled = false;
             btn.innerHTML = `<span>Continue to Verification</span> <i class="fa-solid fa-arrow-right text-xs"></i>`;
-
-            // Transition to Step 2
             document.getElementById('step1Card').classList.add('hidden');
-            document.getElementById('step2Card').classList.remove('hidden');
-            document.getElementById('targetEmail').textContent = document.getElementById('email').value.trim();
-
-            // Update Step Indicators
-            document.getElementById('stepBadge1').className = 'flex items-center gap-2 text-xs font-medium px-3 py-1 rounded-full bg-slate-900/60 text-slate-500 border border-slate-800 transition-all';
-            document.getElementById('stepBadge2').className = 'flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 transition-all';
-
-            // Start Resend Timer and Focus First OTP Box
-            startResendTimer();
-            const otpInputs = document.querySelectorAll('.otp-input');
-            if (otpInputs.length > 0) otpInputs[0].focus();
-        }, 800);
+            document.getElementById('successCard').classList.remove('hidden');
+            document.getElementById('successTitle').textContent = 'Account created';
+            document.getElementById('successDesc').textContent = 'Your account is ready. You can sign in now.';
+            window.setTimeout(() => { window.location.href = '/profile'; }, 500);
+        } catch (error) {
+            const message = document.getElementById('registrationError') || document.createElement('p');
+            message.id = 'registrationError';
+            message.className = 'auth-error';
+            message.textContent = error.message;
+            btn.parentElement.appendChild(message);
+            btn.disabled = false;
+            btn.innerHTML = `<span>Continue to Verification</span> <i class="fa-solid fa-arrow-right text-xs"></i>`;
+        }
     }
 }
 

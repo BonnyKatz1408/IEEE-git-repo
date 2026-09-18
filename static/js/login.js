@@ -64,29 +64,37 @@ function showLoginCard() {
 }
 
 // Handle Login Submit
-function handleLoginSubmit(e) {
+async function handleLoginSubmit(e) {
     e.preventDefault();
 
     const isEmailValid = validateLoginField('email');
     const isPassValid = validateLoginField('password');
     const loginAlert = document.getElementById('loginAlert');
+    const loginAlertMessage = document.getElementById('loginAlertMessage');
 
     if (isEmailValid && isPassValid) {
         const btn = document.getElementById('loginBtn');
         btn.disabled = true;
         btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-xs"></i> <span>Authenticating...</span>`;
         loginAlert.classList.add('hidden');
-
-        setTimeout(() => {
+        try {
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: document.getElementById('email').value.trim(),
+                    password: document.getElementById('password').value,
+                }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Unable to sign in.');
+            window.location.href = '/';
+        } catch (error) {
+            loginAlertMessage.textContent = error.message;
+            loginAlert.classList.remove('hidden');
             btn.disabled = false;
             btn.innerHTML = `<span>Sign In</span> <i class="fa-solid fa-arrow-right text-xs"></i>`;
-
-            // Transition to Success Card
-            document.getElementById('loginCard').classList.add('hidden');
-            document.getElementById('successTitle').textContent = 'Welcome back!';
-            document.getElementById('successDesc').textContent = 'You have successfully signed in. Redirecting to your dashboard...';
-            document.getElementById('successCard').classList.remove('hidden');
-        }, 1000);
+        }
     }
 }
 

@@ -1,0 +1,191 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap');
+
+body {
+    background: #f2eee7 !important;
+    color: #24221e !important;
+    font-family: 'DM Mono', monospace !important;
+}
+
+.auth-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: #24221e;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-decoration: none;
+}
+
+.auth-brand-mark {
+    display: inline-grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border-radius: 50%;
+    background: #314b7e;
+    box-shadow: inset 0 0 0 5px #7898d1, inset 0 0 0 9px #314b7e;
+    color: #ef8348;
+    font-size: 0.65rem;
+}
+
+.auth-nav-link {
+    color: #d95d39;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    text-decoration: none;
+}
+
+.dark-card {
+    border: 1px solid #d8d0c3 !important;
+    border-radius: 3px !important;
+    background: #fbfaf7 !important;
+    box-shadow: 6px 6px 0 rgba(36, 34, 30, 0.09) !important;
+}
+
+.auth-brand ~ div,
+main label,
+main p,
+main span,
+main h1,
+main h2,
+footer {
+    font-family: 'DM Mono', monospace;
+}
+
+main h1,
+main h2 {
+    color: #24221e !important;
+    font-family: 'Newsreader', Georgia, serif !important;
+    letter-spacing: 0 !important;
+}
+
+main p,
+footer,
+main label {
+    color: #706b62 !important;
+}
+
+.dark-input {
+    border: 1px solid #d8d0c3 !important;
+    border-radius: 2px !important;
+    background: #f2eee7 !important;
+    color: #24221e !important;
+}
+
+.dark-input:focus {
+    border-color: #d95d39 !important;
+    box-shadow: 0 0 0 2px rgba(217, 93, 57, 0.14) !important;
+}
+
+button[type='submit'] {
+    border-radius: 3px !important;
+    background: #d95d39 !important;
+    box-shadow: none !important;
+}
+
+.auth-error {
+    margin-top: 12px;
+    color: #b43e2b;
+    font-size: 0.75rem;
+}
+
+.auth-success {
+    color: #31715b;
+    font-size: 0.75rem;
+}
+
+.profile-page {
+    min-height: 100vh;
+}
+
+.profile-page .navbar {
+    padding: 26px 6vw;
+}
+
+.profile-main {
+    width: min(680px, calc(100% - 40px));
+    margin: 48px auto 80px;
+}
+
+.profile-heading {
+    margin-bottom: 28px;
+}
+
+.profile-heading h1 {
+    margin-bottom: 12px;
+    font-size: clamp(2.8rem, 7vw, 5rem);
+    line-height: 0.95;
+}
+
+.profile-heading p:last-child {
+    max-width: 440px;
+    font-family: 'Newsreader', Georgia, serif;
+    font-size: 1.2rem;
+    line-height: 1.35;
+}
+
+.profile-card {
+    display: grid;
+    gap: 10px;
+    padding: 26px;
+    border: 1px solid #d8d0c3;
+    border-radius: 3px;
+    background: #fbfaf7;
+    box-shadow: 6px 6px 0 rgba(36, 34, 30, 0.09);
+}
+
+.profile-card label {
+    margin-top: 8px;
+    color: #24221e;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.profile-card label span {
+    color: #938c81;
+    text-transform: none;
+}
+
+.profile-card input,
+.profile-card textarea {
+    width: 100%;
+    border: 1px solid #d8d0c3;
+    border-radius: 2px;
+    padding: 13px 14px;
+    background: #f2eee7;
+    color: #24221e;
+    font: 0.78rem/1.4 'DM Mono', monospace;
+    outline: none;
+    resize: vertical;
+}
+
+.profile-card input:focus,
+.profile-card textarea:focus {
+    border-color: #d95d39;
+    box-shadow: 0 0 0 2px rgba(217, 93, 57, 0.14);
+}
+
+.profile-save {
+    justify-self: start;
+    margin-top: 16px;
+}
+
+@media (max-width: 680px) {
+    .profile-page .navbar {
+        align-items: flex-start;
+        gap: 18px;
+    }
+
+    .profile-page .nav-actions {
+        gap: 8px;
+    }
+
+    .profile-page .nav-actions .btn-login,
+    .profile-page .nav-actions .btn-primary {
+        padding: 9px 10px;
+        font-size: 0.64rem;
+    }
+}

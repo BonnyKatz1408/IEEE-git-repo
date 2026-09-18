@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create Account</title>
+    <title>Create account - WAYPOINT</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome Icons -->
@@ -12,6 +12,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Custom Stylesheet -->
     <link rel="stylesheet" href="../static/css/registration.css">
+    <link rel="stylesheet" href="../static/css/auth.css">
     
     <script>
         tailwind.config = {
@@ -48,16 +49,14 @@
 
     <header class="w-full max-w-5xl mx-auto flex items-center justify-between py-4 z-10">
         <!-- Logo configured as Home Link -->
-        <a href="index.html" title="Go to Home" class="flex items-center gap-2.5 group transition-opacity hover:opacity-90">
-            <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-sm tracking-widest shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
-                <i class="fa-solid fa-house text-xs"></i>
-            </div>
-            <span class="font-semibold text-slate-100 tracking-tight text-base">App</span>
+        <a href="/" title="Go to home" class="auth-brand">
+            <span class="auth-brand-mark">W</span>
+            <span>WAYPOINT</span>
         </a>
 
         <div class="text-xs font-medium text-slate-400">
             <span>Already have an account?</span>
-            <a href="login.html" class="ml-1.5 text-indigo-400 hover:text-indigo-300 hover:underline transition-all">Sign in</a>
+            <a href="/login" class="ml-1.5 text-indigo-400 hover:text-indigo-300 hover:underline transition-all">Sign in</a>
         </div>
     </header>
 

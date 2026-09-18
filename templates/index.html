@@ -3,90 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WAYPOINT - Understand Any GitHub Repo</title>
+    <title>WAYPOINT - Read a repository before you change it</title>
     <link rel="stylesheet" href="../static/css/indexpage.css">
-    <!-- Google Fonts for Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
 </head>
 <body>
-
     <nav class="navbar">
         <div class="logo">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M7 8L3 12L7 16" stroke="#8ba5cb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M17 8L21 12L17 16" stroke="#8ba5cb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M14 4L10 20" stroke="#8ba5cb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <svg class="waypoint-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                <path d="M16 3.5L27 10v12L16 28.5 5 22V10L16 3.5Z" fill="#314b7e"/>
+                <path d="M16 3.5V16.5M16 16.5L5 10M16 16.5L27 10" stroke="#7898d1" stroke-width="1.2"/>
+                <path d="M12.5 12.5 16 10.7l3.5 1.8v5.4L16 19.7l-3.5-1.8v-5.4Z" fill="#ef8348"/>
             </svg>
             <span>WAYPOINT</span>
         </div>
-        
-        <ul class="nav-links">
-            <li><a href="#">Features</a></li>
-            <li><a href="#">How It Works</a></li>
-            <li><a href="#">Pricing</a></li>
-        </ul>
-
+        <ul class="nav-links"><li><span>Repository notes</span></li><li><span>Built for the first read</span></li></ul>
         <div class="nav-actions">
-            <a href="#" class="btn-login">Log In</a>
-            <a href="/register" class="btn-primary">Get Started</a>
+            {% if current_user %}
+                <a href="/profile" class="btn-login">{{ current_user.full_name }}</a>
+                <form action="/logout" method="post"><button type="submit" class="btn-primary">Sign out</button></form>
+            {% else %}
+                <a href="/login" class="btn-login">Sign in</a>
+                <a href="/register" class="btn-primary">Create account</a>
+            {% endif %}
         </div>
     </nav>
-
     <main class="hero">
-        <h1>Understand Any GitHub Repo in Minutes</h1>
-        <p class="subtitle">Paste a GitHub link, and WAYPOINT visualizes the project structure, key dependencies, and codebase flow instantly.</p>
-
+        <p class="hero-kicker">A field guide for unfamiliar code</p>
+        <h1>Read the repo before you touch it.</h1>
+        <p class="subtitle">Drop in a public GitHub repository. Waypoint lays out its structure, important files, and paths through the code so you can find your footing.</p>
         <div class="input-card">
-            <label for="repo-url">Paste GitHub Repository URL</label>
-            <div class="input-group">
-                <div class="input-wrapper">
-                    <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                        <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.48 2 12C2 16.418 4.865 20.166 8.839 21.492C9.339 21.584 9.52 21.275 9.52 21.011C9.52 20.776 9.511 20.148 9.506 19.309C6.726 19.913 6.139 17.969 6.139 17.969C5.684 16.815 5.029 16.507 5.029 16.507C4.123 15.888 5.097 15.9 5.097 15.9C6.099 15.97 6.626 16.93 6.626 16.93C7.515 18.453 8.956 18.013 9.54 17.756C9.63 17.094 9.897 16.654 10.194 16.403C7.974 16.151 5.64 15.293 5.64 11.536C5.64 10.465 6.022 9.59 6.643 8.898C6.543 8.647 6.205 7.647 6.739 6.302C6.739 6.302 7.556 6.04 9.5 7.355C10.276 7.14 11.139 7.032 12 7.028C12.861 7.032 13.724 7.14 14.501 7.355C16.444 6.04 17.26 6.302 17.26 6.302C17.795 7.647 17.457 8.647 17.357 8.898C17.979 9.59 18.358 10.465 18.358 11.536C18.358 15.304 16.022 16.148 13.795 16.393C14.167 16.713 14.499 17.348 14.499 18.318C14.499 19.708 14.486 20.832 14.486 21.011C14.486 21.278 14.665 21.59 15.171 21.491C19.143 20.164 22 16.417 22 12C22 6.48 17.523 2 12 2Z"/>
-                    </svg>
-                    <input type="text" id="repo-url" placeholder="https://github.com/facebook/react">
-                </div>
-                <button class="btn-primary btn-map" id="analyze-btn" type="button">Map Repository</button>
-            </div>
+                    <label for="repo-url">Start with a repository</label>
+                    <div class="input-group">
+                        <div class="input-wrapper"><svg class="github-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.49.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.15-1.1-1.46-1.1-1.46-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.52 2.33 1.08 2.9.82.09-.64.35-1.08.64-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02A9.56 9.56 0 0 1 12 6.83c.85 0 1.71.11 2.51.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86v2.75c0 .27.18.58.69.48A10.01 10.01 0 0 0 22 12c0-5.52-4.48-10-10-10Z"/></svg><input type="text" id="repo-url" placeholder="https://github.com/facebook/react"></div>
+                        <button class="btn-primary btn-map" id="analyze-btn" type="button">Read repository</button>
+                    </div>
             <p class="form-message" id="form-message" role="status"></p>
         </div>
+        <section class="landing-notes" aria-label="What Waypoint finds">
+            <div class="landing-note"><span class="note-number">01</span><div><h2>See the shape</h2><p>Directories and files become a map you can scan at a glance.</p></div></div>
+            <div class="landing-note"><span class="note-number">02</span><div><h2>Find the landmarks</h2><p>Spot entry points, hotspots, and the files worth reading first.</p></div></div>
+            <div class="landing-note"><span class="note-number">03</span><div><h2>Follow the path</h2><p>Trace dependencies and ask questions when the map needs context.</p></div></div>
+        </section>
     </main>
 
     <main class="analysis-view hidden" id="analysis-view">
-        <header class="analysis-header">
-            <div>
-                <p class="eyebrow">Repository map</p>
-                <h1 id="analysis-title">Repository</h1>
-            </div>
-            <div class="analysis-actions">
-                <button class="btn-reset" id="reset-view-btn" type="button">Reset View</button>
-                <button class="btn-login" id="new-analysis-btn" type="button">New analysis</button>
-            </div>
-        </header>
+        <header class="analysis-header"><div><p class="eyebrow">Repo Autopsy</p><h1 id="analysis-title">Repository</h1></div><div class="analysis-actions"><button class="btn-reset" id="reset-view-btn" type="button">Reset View</button><button class="btn-login" id="new-analysis-btn" type="button">New analysis</button></div></header>
         <div class="analysis-layout">
             <aside class="map-sidebar" id="map-sidebar" aria-label="Repository briefing"></aside>
             <section class="map-panel" aria-label="Interactive repository map">
-                <div class="map-canvas" id="map-canvas"></div>
-                <div class="map-tooltip hidden" id="map-tooltip"></div>
-                <aside class="analysis-inspector hidden" id="analysis-inspector" aria-live="polite"></aside>
-                <div class="map-legend">
-                    <span><i class="legend-swatch legend-normal"></i>File size</span>
-                    <span><i class="legend-swatch legend-hotspot"></i>Hotspot roof</span>
-                    <span><i class="legend-swatch legend-entry"></i>Entry point</span>
-                </div>
+                <div class="map-canvas" id="map-canvas"></div><div class="map-tooltip hidden" id="map-tooltip"></div><aside class="analysis-inspector hidden" id="analysis-inspector" aria-live="polite"></aside>
+                <div class="map-legend"><span><i class="legend-swatch legend-normal"></i>File size</span><span><i class="legend-swatch legend-hotspot"></i>Hotspot roof</span><span><i class="legend-swatch legend-entry"></i>Entry point</span></div>
+                <button class="ask-reopen hidden" id="ask-reopen" type="button">Ask about this repository</button>
+                <section class="ask-panel hidden" id="ask-panel" aria-live="polite"><div class="ask-header"><div><p class="eyebrow">AI + RAG</p><h2>Ask about this repository</h2></div><div class="ask-panel-actions"><button class="ask-panel-control" id="ask-minimize" type="button" title="Minimize AI panel" aria-label="Minimize AI panel">−</button><button class="ask-panel-control" id="ask-close" type="button" title="Close AI panel" aria-label="Close AI panel">×</button></div></div><div class="ask-form-row"><input id="repo-question" type="text" placeholder="Ask about architecture, entry points, dependencies, or files..."><button id="ask-btn" class="btn-primary" type="button">Ask</button></div><div class="ask-chips" aria-label="Example repository questions"><button type="button" class="ask-chip" data-question="What is this repo?">What is this repo?</button><button type="button" class="ask-chip" data-question="Where should I start?">Where should I start?</button><button type="button" class="ask-chip" data-question="Explain the main flow">Explain the main flow</button><button type="button" class="ask-chip" data-question="Explain this file">Explain this file</button><button type="button" class="ask-chip" data-question="What depends on this?">What depends on this?</button></div><div class="ask-result hidden" id="ask-result"></div></section>
             </section>
         </div>
-        <section class="analysis-summary hidden" id="analysis-summary" hidden></section>
-        <footer class="map-stats" id="map-stats"></footer>
+        <section class="analysis-summary hidden" id="analysis-summary" hidden></section><footer class="map-stats" id="map-stats"></footer>
     </main>
 
     <footer class="footer">
         <div class="footer-left">
-            © 2023 © WAYPOINT delivers. All rights reserved.
+            WAYPOINT / repository field notes
         </div>
         <div class="footer-right">
-            <a href="#">WAYPOINT.com</a>
+            <a href="#">About</a>
             <a href="#">Privacy</a>
             <a href="#">Terms</a>
         </div>
